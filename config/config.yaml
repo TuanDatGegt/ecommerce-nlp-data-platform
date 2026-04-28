@@ -1,0 +1,11 @@
+data_lake:
+  layer: raw
+  source: amazon_reviews
+  partition_by:
+    - category
+
+pipeline:
+  steps:
+    - extract
+    - transform
+    - load
