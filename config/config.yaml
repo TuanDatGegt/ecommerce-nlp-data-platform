@@ -1,11 +1,38 @@
-data_lake:
-  layer: raw
-  source: amazon_reviews
-  partition_by:
-    - category
-
-pipeline:
-  steps:
-    - extract
-    - transform
-    - load
+categories:
+- Apparel
+- Automotive
+- Baby
+- Beauty
+- Books
+- Camera
+- Digital_Ebook_Purchase
+- Digital_Music_Purchase
+- Digital_Software
+- Digital_Video_Download
+- Digital_Video_Games
+- Electronics
+- Furniture
+- Gift_Card
+- Grocery
+- Health_Personal_Care
+- Major_Appliances
+- Mobile_Apps
+- Mobile_Electronics
+- Music
+- Musical_Instruments
+- Office_Products
+- Outdoors
+- PC
+- Personal_Care_Appliances
+- Pet_Products
+- Shoes
+- Software
+- Sports
+- Tools
+- Toys
+- Unknown
+- Video
+- Video_DVD
+- Video_Games
+- Watches
+- Wireless
