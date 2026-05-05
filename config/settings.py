@@ -5,6 +5,7 @@ load_dotenv()
 
 RAW_DATA_PATH = os.getenv('RAW_DATA_PATH')
 PROCESSED_DATA_PATH = os.getenv('PROCESSED_DATA_PATH')
+yaml_config_path = os.getenv('YAML_CONFIG_PATH')
 
 MAX_WORKERS = int(os.getenv('MAX_WORKERS', 4))
 
