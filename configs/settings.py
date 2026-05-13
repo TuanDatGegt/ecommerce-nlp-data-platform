@@ -10,6 +10,8 @@ SAMPLE_DATA_PATH = os.getenv('SAMPLE_DATA_PATH')
 
 yaml_config_path = os.getenv('YAML_CONFIG_PATH')
 
+MANIFEST_PATH = os.getenv('MANIFEST_PATH')
+
 MAX_WORKERS = int(os.getenv('MAX_WORKERS', 4))
 
 CHUNK_SIZE = 200_000
