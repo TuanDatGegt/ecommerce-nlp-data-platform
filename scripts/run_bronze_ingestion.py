@@ -19,6 +19,8 @@ from pipeline.bronze.transform import (
     add_metadata_columns
 )
 
+from pipeline.bronze.sample_writer import save_sample_chunk
+
 from pipeline.bronze.validate import (
     validate_required_columns,
     write_to_dlq
@@ -63,6 +65,9 @@ def process_single_file(input_file):
             output_dir,
             i
         )
+        if i == 0:
+            save_sample_chunk(parquet_path=path, category=category)
+        
         logger.info(
             f"Processed {path}"
         )
