@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from configs.settings import (
     RAW_DATA_PATH,
-    PROCESSED_DATA_PATH,
+    DATA_LAKE_PATH,
     MAX_WORKERS
 )
 
@@ -37,6 +37,12 @@ from pipeline.bronze.metadata import (
 
 from utils.logger import setup_logger
 
+from utils.checkpoint import (
+    is_processed,
+    mark_processed
+)
+
+
 logger = setup_logger(
     "bronze_ingestion",
     "logs/bronze_ingestion.log")
@@ -46,9 +52,14 @@ def process_single_file(input_file):
     category = extract_category_from_filename(file_name)
 
     output_dir = build_partition_path(
-        PROCESSED_DATA_PATH,
         category
     )
+
+    if is_processed(file_name):
+        logger.info(
+            f"SKIPPED {file_name}"
+        )
+        return category
 
     try: 
         reader = read_tsv_in_chunks(input_file)
@@ -59,18 +70,19 @@ def process_single_file(input_file):
                 category
             )
 
-        validate_required_columns(chunk)
-        path = write_parquet_chunk(
-            chunk,
-            output_dir,
-            i
-        )
-        if i == 0:
-            save_sample_chunk(parquet_path=path, category=category)
-        
-        logger.info(
-            f"Processed {path}"
-        )
+            validate_required_columns(chunk)
+            path = write_parquet_chunk(
+                chunk,
+                output_dir,
+                i
+            )
+            if i == 0:
+                save_sample_chunk(parquet_path=path, category=category)
+
+            logger.info(
+                f"Processed {path}"
+            )
+        mark_processed(file_name)
 
     except Exception as e:
         logger.error(
