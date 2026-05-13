@@ -42,6 +42,11 @@ from utils.checkpoint import (
     mark_processed
 )
 
+from utils.metrics import PinelineMetrics
+
+metrics = PinelineMetrics()
+
+
 
 logger = setup_logger(
     "bronze_ingestion",
@@ -71,6 +76,7 @@ def process_single_file(input_file):
             )
 
             validate_required_columns(chunk)
+            metrics.add_rows(len(chunk))
             path = write_parquet_chunk(
                 chunk,
                 output_dir,
@@ -82,13 +88,13 @@ def process_single_file(input_file):
             logger.info(
                 f"Processed {path}"
             )
+        metrics.add_file()
         mark_processed(file_name)
 
     except Exception as e:
         logger.error(
             f"FAILED {file_name} | {str(e)}"
         )
-
         write_to_dlq(chunk, file_name)
     
     return category
