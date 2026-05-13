@@ -1,14 +1,15 @@
+#prerocessing/data_preprocesing.py
 import pandas as pd
 import csv
 import os
 from .utils import data_extract_category
-from config import RAW_DATA_PATH, PROCESSED_DATA_PATH, CHUNK_SIZE
+from configs import RAW_DATA_PATH, PROCESSED_DATA_PATH, CHUNK_SIZE
 
-
+"""
 def optimize_csv(df):
-    """
+    
     Optimize the DataFrame by converting data types to reduce memory usage.
-    """
+
     bool_mapping = {"Y": True, "N": False}
 
     for col in ["vine", "verified_purchase"]:
@@ -40,10 +41,9 @@ def optimize_csv(df):
     return df
 
 def process_tsv_file(input_file=RAW_DATA_PATH, output_base = PROCESSED_DATA_PATH):
-    """
     This function reads a TSV file in chunks, optimizes the data types, 
     and writes the precessed data to a new Parquet file.
-    """
+    
     filename = os.path.basename(input_file)
     category = data_extract_category(filename)
 
@@ -85,3 +85,4 @@ if __name__ == "__main__":
         output_base=output_base
     )
     
+"""
