@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from configs.settings import (
     RAW_DATA_PATH,
-    DATA_LAKE_PATH,
     MAX_WORKERS
 )
 
