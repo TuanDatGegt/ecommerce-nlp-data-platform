@@ -14,3 +14,5 @@ logs/
 *.pyc
 *.parquet
 *.tsv
+*.png
+*.json
