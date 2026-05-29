@@ -8,21 +8,17 @@ from configs.settings import RAW_BUCKET_NAME
 
 storage = MinioStorage()
 
-def upload_raw_dataset(dataset_dir):
+def upload_parquet_file(local_path, object_name):
     """
     Uploads all files from the local dataset directory to the Minio raw bucket.
     """
     storage.create_bucket(RAW_BUCKET_NAME)
-    uploaded_files = []
-
-    for file_name in os.listtdir(dataset_dir):
-        if not file_name.endswith(".tsv"):
-            continue
-        local_path = os.path.join(dataset_dir, file_name)
-        object_name = os.path.join("raw", "amazone_review", file_name)
-        storage.upload_file(RAW_BUCKET_NAME, object_name, local_path)
-
-        uploaded_files.append(object_name)
+    storage.upload_file(
+        bucket_name=RAW_BUCKET_NAME, 
+        object_name=object_name, 
+        local_path=local_path
+    )
+    return object_name
 
     print(f"Uploaded {len(uploaded_files)} raw TSV files")
 
