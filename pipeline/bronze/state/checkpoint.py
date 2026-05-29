@@ -41,10 +41,6 @@ def save_manifest(manifest):
 
     os.remove(local_manifest)
 
-
-
-
-
 def is_processed(file_name):
     manifest = load_manifest()
     return manifest.get(file_name, False)
@@ -58,7 +54,7 @@ def mark_processed(file_name):
 def reset_checkpoint(file_name):
     manifest = load_manifest()
     if file_name in manifest:
-        manifest[file_name]
+        del manifest[file_name]
     save_manifest(manifest)
 
 
