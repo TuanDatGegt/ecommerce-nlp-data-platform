@@ -6,7 +6,7 @@ data/raw/
 __pycache__/
 __init__.py
 baa44b46-11ed-404b-b0de-1dbceb2e02d5.png
-#roadmap_pipeline.txt
+roadmap_pipeline.txt
 
 # Keep sample parquet
 !data/sample/**/*.parquet
