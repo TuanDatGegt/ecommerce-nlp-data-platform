@@ -1,4 +1,4 @@
-#pipeline/bronze/validate.py
+#pipeline/bronze/processing/validate.py
 import os
 
 from configs.schemas.review_schemas import REQUIRED_COLUMNS
@@ -12,11 +12,38 @@ def validate_required_columns(df):
     if missing:
         raise ValueError(f"missing columns: {missing}")
     
-def write_to_dlq(df, filename):
-    os.makedirs('dlq', exist_ok=True)
+def validate_rating_range(df):
+    if "star_rating" not in df.columns:
+        return df
+    
+    return df[
+        (df["star_rating"] >1) & (df["star_rating"] <=5)
+    ]
 
-    path = f'data/dlq/{filename}.json'
+def validate_helpful_votes(df):
+    if ("helpful_votes" not in df.columns
+        or "total_votes" not in df.columns
+    ):
+        return df
+    
+    return df[
+        (df["helpful_votes"] <= df["total_votes"])
+    ]
 
-    df.to_json(path, orient='records')
+def removed_null_reviews(df):
+
+    required_text_columns = ["review_body", "review_title"]
+    for col in required_text_columns:
+        if col in df.columns:
+            df = df[df[col].notna()]
+    
+    return df
+
+
+def remove_duplicates(df):
+    if "review_id" not in df.columns:
+        return df
+    
+    return df.drop_duplicates(subset=["review_id"])
 
 
