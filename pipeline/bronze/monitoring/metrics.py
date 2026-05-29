@@ -2,7 +2,7 @@
 import time
 from datetime import datetime, timezone
 
-class PinelineMetrics:
+class PipelineMetrics:
     def __init__(self):
         self.pipeline_start_time = time.time()
         self.total_rows = 0
