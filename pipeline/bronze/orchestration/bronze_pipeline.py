@@ -1,12 +1,15 @@
 #pipeline/bronze/orchestration/bronze_pipeline.py
 
 import os
+import sys
 
 from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
 from tqdm import tqdm
+import multiprocessing
 
 from pipeline.bronze.kaggle.downloader import download_kaggle_dataset
-from pipeline.bronze.storage.raw_storage import upload_raw_dataset
+from pipeline.bronze.storage.raw_storage import upload_parquet_file, build_bronze_object_name
 from pipeline.bronze.kaggle.extractor import discover_tsv_files
 from pipeline.bronze.kaggle.cleanup import cleanup_files
 from pipeline.bronze.processing.reader import read_tsv_in_chunks
@@ -26,7 +29,7 @@ from pipeline.bronze.processing.metadata import (
 
 from pipeline.bronze.processing.writer import write_parquet_chunk
 from pipeline.bronze.state.checkpoint import is_processed, mark_processed
-from pipeline.bronze.monitoring.metrics import PinelineMetrics
+from pipeline.bronze.monitoring.metrics import PipelineMetrics
 from pipeline.bronze.monitoring.lineage import record_lineage
 from pipeline.bronze.dlq.dead_letter_queue import write_to_dlq
 from utils.logger import setup_logger
@@ -37,16 +40,16 @@ logger = setup_logger(
     "logs/bronze_pipeline.log"
 )
 
-def process_single_file(input_file):
+def process_single_file(args):
+    input_file, shared_metrics_queue = args
     file_name = os.path.basename(input_file)
+
+    now = datetime.now(timezone.utc)
+    year = now.year
+    month = f"{now.month:02d}"
+
     category = extract_category_from_filename(file_name)
-    output_prefix = build_partition_prefix(category)
-    
-    local_metrics = {
-        "rows":0,
-        "chunks":0,
-        "files":0
-    }
+   
 
     if is_processed(file_name):
         logger.info(
@@ -56,6 +59,7 @@ def process_single_file(input_file):
     
     chunk = None
     try:
+        logger.info(f"START PROCESSING: {file_name}")
         reader = read_tsv_in_chunks(input_file)
 
         for i, chunk in enumerate(reader):
@@ -67,13 +71,19 @@ def process_single_file(input_file):
             chunk = removed_null_reviews(chunk)
             chunk = remove_duplicates(chunk)
 
-            parquet_object=(
-                write_parquet_chunk(
-                    df=chunk,
-                    output_prefix=output_prefix,
-                    chunk_idx=i
-                )
+            local_file_path = write_parquet_chunk(df=chunk, chunk_idx=i)
+
+            object_name=build_bronze_object_name(
+                category=category,
+                year=year,
+                month=month,
+                chunk_idx=i
             )
+
+            parquet_object = upload_parquet_file(local_file_path, object_name)
+
+            if os.path.exists(local_file_path):
+                os.remove(local_file_path)
 
             record_lineage(
                 source_file=file_name,
@@ -83,11 +93,9 @@ def process_single_file(input_file):
                 chunk_idx=i
             )
 
-            local_metrics["rows"] += len(chunk)
-            local_metrics["chunks"] += 1
-            logger.info(
-                f"SUCCESS: {parquet_object}"
-            )
+            shared_metrics_queue.put(("rows", len(chunk)))
+            shared_metrics_queue.put(("chunks", 1))
+            logger.info(f"SUCCESS: {parquet_object}")
 
         local_metrics["files"] += 1
         mark_processed(file_name)
@@ -115,7 +123,7 @@ def run_pipeline():
     upload_raw_dataset(dataset_path)
     input_files = discover_tsv_files(dataset_path)
 
-    metrics = PinelineMetrics()
+    metrics = PipelineMetrics()
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
         results=list(tqdm(executor.map(process_single_file, input_files), total=len(input_files)))
