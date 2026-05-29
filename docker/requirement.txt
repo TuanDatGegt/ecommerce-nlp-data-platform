@@ -1,0 +1,10 @@
+pandas
+pyarrow
+fastparquet
+duckdb
+tqdm
+python-dotenv
+pyyaml
+apache-airflow
+kagglehub
+fastparquet
