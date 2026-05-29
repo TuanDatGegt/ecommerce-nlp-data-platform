@@ -1,8 +1,9 @@
+#utils/logger.py
 import logging
 import os
 
-def setup_logger(name, log_file):
-    logger = logging.getLogger(name)
+def setup_logger(logger_name, log_file):
+    logger = logging.getLogger(logger_name)
 
     if not logger.handlers:
         logger.setLevel(logging.INFO)
