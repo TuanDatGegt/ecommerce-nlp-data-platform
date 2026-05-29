@@ -37,13 +37,16 @@ logger = setup_logger(
     "logs/bronze_pipeline.log"
 )
 
-metrics = PinelineMetrics()
-
 def process_single_file(input_file):
     file_name = os.path.basename(input_file)
-
     category = extract_category_from_filename(file_name)
     output_prefix = build_partition_prefix(category)
+    
+    local_metrics = {
+        "rows":0,
+        "chunks":0,
+        "files":0
+    }
 
     if is_processed(file_name):
         logger.info(
@@ -51,6 +54,7 @@ def process_single_file(input_file):
         )
         return
     
+    chunk = None
     try:
         reader = read_tsv_in_chunks(input_file)
 
@@ -62,6 +66,7 @@ def process_single_file(input_file):
             chunk = validate_helpful_votes(chunk)
             chunk = removed_null_reviews(chunk)
             chunk = remove_duplicates(chunk)
+
             parquet_object=(
                 write_parquet_chunk(
                     df=chunk,
@@ -78,13 +83,13 @@ def process_single_file(input_file):
                 chunk_idx=i
             )
 
-            metrics.add_rows(len(chunk))
-            metrics.add_processed_chunk()
+            local_metrics["rows"] += len(chunk)
+            local_metrics["chunks"] += 1
             logger.info(
                 f"SUCCESS: {parquet_object}"
             )
 
-        metrics.add_processed_file()
+        local_metrics["files"] += 1
         mark_processed(file_name)
 
     except Exception as e:
@@ -97,6 +102,9 @@ def process_single_file(input_file):
             source_file=file_name,
             error_message=str(e)
         )
+    return local_metrics
+
+
 
 def run_pipeline():
     logger.info(
@@ -107,10 +115,17 @@ def run_pipeline():
     upload_raw_dataset(dataset_path)
     input_files = discover_tsv_files(dataset_path)
 
+    metrics = PinelineMetrics()
+
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        list(tqdm(executor.map(process_single_file, input_files), total=len(input_files)))
+        results=list(tqdm(executor.map(process_single_file, input_files), total=len(input_files)))
+
+        for res in results:
+            if res:
+                metrics.add_rows(res["rows"])
+                for _ in range(res["chunks"]): metrics.add_processed_chunk(res["chunks"])
+                for _ in range(res["files"]): metrics.add_processed_file(res["files"])
 
         cleanup_files(dataset_path)
-        metrics.log_metrics()
-        logger.info(f"PIPELINE COMPLETED")
-
+        metrics.print_summary()
+        logger.info("BRONZE PIPELINE COMPLETED")
