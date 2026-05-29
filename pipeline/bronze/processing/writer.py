@@ -10,14 +10,14 @@ storage = MinioClient()
 
 def write_parquet_chunk(df, output_prefix, chunk_idx):
 
-    temp_dir = tempfile.kwtempdir()
+    temp_dir = tempfile.mkdtemp()
     local_file = os.path.join(temp_dir, f"part_{chunk_idx:05d}.parquet")
  
     df.to_parquet(local_file, index=False, compression='snappy')
 
     object_name = os.path.join(output_prefix, f"part_{chunk_idx:05d}.parquet")
 
-    storage.upload_file(buket_name=MINIO_BUCKET_NAME, object_name=object_name, file_path=local_file)
+    storage.upload_file(bucket_name=MINIO_BUCKET_NAME, object_name=object_name, file_path=local_file)
 
     os.remove(local_file)
 
