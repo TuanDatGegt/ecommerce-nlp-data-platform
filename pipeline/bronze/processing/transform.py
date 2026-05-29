@@ -1,4 +1,4 @@
-#pipeline/bronze/transform.py
+#pipeline/bronze/processing/transform.py
 
 import pandas as pd
 from datetime import datetime, timezone
@@ -31,7 +31,7 @@ def optimize_dataframe(df):
 
     for col in int_columns:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], downcast='integer')
+            df[col] = pd.to_numeric(df[col], downcast='integer', errors='coerce')
 
     if "review_date" in df.columns:
         df['review_date'] = pd.to_datetime(df['review_date'], errors='coerce')
