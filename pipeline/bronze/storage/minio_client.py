@@ -5,7 +5,7 @@ from minio.error import S3Error
 
 from configs.settings import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_SECURE
 
-class MinioCLinent:
+class MinioClient:
     def __init__(self):
         self.client = Minio(
             endpoint=MINIO_ENDPOINT,
@@ -13,6 +13,27 @@ class MinioCLinent:
             secret_key=MINIO_SECRET_KEY,
             secure=MINIO_SECURE
         )
+
+        self.required_buckets = ["bronze", "silver", "gold"]
+        self._auto_init_buckets()
+
+    def _auto_init_buckets(self):
+        """Function locally automatically creates the required buckets if they don't exist."""
+        try:
+            print(f"============== MINIO CLIENT INITIALIZATION ==============")
+            for bucket_name in self.required_buckets:
+                if not self.client.bucket_exists(bucket_name):
+                    self.client.make_bucket(bucket_name)
+                    print(f"[CREATED] Bucket '{bucket_name}' created.")
+                else:
+                    print(f"[EXISTS] Bucket '{bucket_name}' already exists.")
+            print(f"==========================================================")
+
+        except S3Error as e:
+            raise RuntimeError(f"Error initializing MinIO client: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Cannot connect to MinIO server: {e}")
+
 
     def bucket_exists(self, bucket_name):
         return self.client.bucket_exists(bucket_name)
