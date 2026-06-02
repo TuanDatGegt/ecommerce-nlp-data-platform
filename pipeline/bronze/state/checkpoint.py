@@ -5,17 +5,21 @@ import os
 
 from pipeline.bronze.storage.minio_client import MinioClient
 
-from configs.settings import MINIO_BUCKET_NAME, CHECKPOINT_OBJECT
-
-storage = MinioClient()
+from configs.settings import CHECKPOINT_OBJECT, RAW_BUCKET_NAME
 
 def load_manifest():
+    """Load file manifest checkpoint on MinIO to checking status."""
+    storage = MinioClient()
     temp_dir = tempfile.mkdtemp()
     local_manifest = os.path.join(temp_dir, "bronze_manifest.json")
     try:
-        storage.download_file(bucket_name=MINIO_BUCKET_NAME, object_name=CHECKPOINT_OBJECT, file_path=local_manifest)
+        storage.download_file(
+            bucket_name=RAW_BUCKET_NAME,
+            object_name=CHECKPOINT_OBJECT,
+            file_path=local_manifest
+        )
 
-        with open(local_manifest, "r") as f:
+        with open(local_manifest, "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
     except Exception:
@@ -30,20 +34,28 @@ def load_manifest():
 
     
 def save_manifest(manifest):
-
+    """Save updating file manifest checkpoint return MinIO"""
+    storage = MinioClient()
     temp_dir = tempfile.mkdtemp()
     local_manifest = os.path.join(temp_dir, "bronze_manifest.json")
 
-    with open(local_manifest, 'w') as f:
+    with open(local_manifest, 'w', encoding="utf-8") as f:
         json.dump(manifest, f, indent=4)
 
-    storage.upload_file(bucket_name=MINIO_BUCKET_NAME, object_name=CHECKPOINT_OBJECT, file_path=local_manifest)
-
-    os.remove(local_manifest)
+    storage.upload_file(
+        bucket_name=RAW_BUCKET_NAME,
+        object_name=CHECKPOINT_OBJECT,
+        file_path=local_manifest
+    )
+    if os.path.exists(load_manifest):
+        os.remove(local_manifest)
 
 def is_processed(file_name):
     manifest = load_manifest()
-    return manifest.get(file_name, False)
+    status = manifest.get(file_name)
+    if isinstance(status, dict):
+        return status.get("processed", False)
+    return False
 
 def mark_processed(file_name):
     manifest = load_manifest()
