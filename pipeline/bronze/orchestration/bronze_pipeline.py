@@ -10,6 +10,7 @@ import multiprocessing
 
 from pipeline.bronze.kaggle.downloader import download_kaggle_dataset
 from pipeline.bronze.storage.raw_storage import upload_parquet_file, build_bronze_object_name
+from pipeline.bronze.storage.minio_client import MinioClient
 from pipeline.bronze.kaggle.extractor import discover_tsv_files
 from pipeline.bronze.kaggle.cleanup import cleanup_files
 from pipeline.bronze.processing.reader import read_tsv_in_chunks
@@ -97,43 +98,81 @@ def process_single_file(args):
             shared_metrics_queue.put(("chunks", 1))
             logger.info(f"SUCCESS: {parquet_object}")
 
-        local_metrics["files"] += 1
         mark_processed(file_name)
+        shared_metrics_queue.put(("files", 1))
+        logger.info(f"COMPLETED FILE: {file_name}")
 
     except Exception as e:
-        logger.error(
-            f"FAILED: {file_name} {str(e)}"
-        )
+        error_message = f"CRITICAL ERROR in file {file_name}: {str(e)}"
 
+        logger.error(error_message)
+        
         write_to_dlq(
             df=chunk,
             source_file=file_name,
             error_message=str(e)
         )
-    return local_metrics
+
+        if chunk is not None:
+            shared_metrics_queue.put(("failed_rows", len(chunk)))
 
 
 
 def run_pipeline():
-    logger.info(
-        "STARTING BRONZE PIPELINE"
-    )
+    """Function to run the system Data Pipeline in layer Bronze"""
+    logger.info("==========================================")
+    logger.info("   STARTING AMAZON REVIEWS BRONZE PIPELINE ")
+    logger.info("==========================================")
 
+    logger.info("Checking Storage Infrastructure (MinIO)...")
+    try:
+        MinioClient()
+        logger.info("MinIO Infrastructure is ready.")
+    except Exception as e:
+        logger.critical(f"Pipeline has Stopped. MinIO Initialization failed: {str(e)}")
+        print(f"Không thể chạy pipeline do lỗi kết nối với MinIO Server. Hãy chắc chắn đã bật MinIO trên Bash")
+        return
+    
+    
     dataset_path = download_kaggle_dataset()
-    upload_raw_dataset(dataset_path)
+
     input_files = discover_tsv_files(dataset_path)
+    if not input_files:
+        logger.warning("No TSV files found in the dataset. Exiting pipeline.")
+        return
+    
+    manager = multiprocessing.Manager()
+    shared_metrics_queue = manager.Queue()
+
+    task_args = [(file, shared_metrics_queue) for file in input_files]
+
+    logger.info(f"Processing {len(input_files)} files with {MAX_WORKERS} workers...")
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        list(tqdm(executor.map(process_single_file, task_args), total=len(input_files)))
 
     metrics = PipelineMetrics()
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        results=list(tqdm(executor.map(process_single_file, input_files), total=len(input_files)))
+    while not shared_metrics_queue.empty():
+        metric_type, value = shared_metrics_queue.get()
+        if metric_type == "rows":
+            metrics.add_rows(value)
+        elif metric_type == "chunks":
+            for _ in range(value):
+                metrics.add_processed_chunk()
+        elif metric_type == "files":
+            for _ in range(value):
+                metrics.add_processed_file()
+        elif metric_type == "failed_rows":
+            metrics.add_failed_rows(value)
 
-        for res in results:
-            if res:
-                metrics.add_rows(res["rows"])
-                for _ in range(res["chunks"]): metrics.add_processed_chunk(res["chunks"])
-                for _ in range(res["files"]): metrics.add_processed_file(res["files"])
+    logger.info("Start cleaning up local middleware files...")
+    cleanup_files(dataset_path)
 
-        cleanup_files(dataset_path)
-        metrics.print_summary()
-        logger.info("BRONZE PIPELINE COMPLETED")
+    metrics.print_summary()
+    logger.info("==========================================")
+    logger.info("        PIPELINE COMPLETED SUCCESSFULLY   ")
+    logger.info("==========================================")
+
+if __name__ == "__main__":
+    run_pipeline()
+
