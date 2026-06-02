@@ -22,3 +22,11 @@ CATEGORY_MAPPING = r"amazon_reviews_us_([A-Za-z0-9_\-]+)_v"
 API_KAGGLE_TOKEN_KEY = os.getenv('API_KAGGLE_TOKEN_KEY')
 USERNAME_KAGGLE = os.getenv('USERNAME_KAGGLE')
 KAGGLE_DATASET = os.getenv('KAGGLE_DATASET')
+
+#MinIO configuration
+MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT')
+MINIO_ACCESS_KEY = os.getenv('MINIO_ROOT_USER')
+MINIO_SECRET_KEY = os.getenv('MINIO_ROOT_PASSWORD')
+MINIO_SECURE = os.getenv('MINIO_SECURE', 'False').lower() == 'true'
+
+RAW_BUCKET_NAME=os.getenv("RAW_BUCKET_NAME")
