@@ -3,7 +3,7 @@ import os
 import tempfile
 
 from pipeline.bronze.storage.minio_client import MinioClient
-from configs.settings import MINIO_BUCKET_NAME
+#from configs.settings import MINIO_BUCKET_NAME
 
 storage = MinioClient()
 
