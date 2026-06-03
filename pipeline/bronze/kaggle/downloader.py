@@ -3,23 +3,33 @@
 import os
 import kagglehub
 
-from configs.settings import KAGGLE_DATASET
-
+from configs.settings import KAGGLE_DATASET, KAGGLEHUB_CACHE_DIR
 from pipeline.bronze.kaggle.auth import validate_kaggle_credentials
 
 def download_kaggle_dataset():
 
     validate_kaggle_credentials()
 
-    print(
-        f"Downloading dataset {KAGGLE_DATASET}"
-    )
+    print("==========================================")
+    print(f"   STARTING DOWNLOAD: {KAGGLE_DATASET}")
+    print("==========================================")
 
-    dataset_path = kagglehub.dataset_download(KAGGLE_DATASET)
+    target_path = os.path.abspath(KAGGLEHUB_CACHE_DIR)
+    print(f"[*] Target Directory: {target_path}")
 
-    print(
-        f"Dataset downloaded to {dataset_path}"
-    )
-
-    return dataset_path
+    try:
+        dataset_path = kagglehub.dataset_download(
+            handle=KAGGLE_DATASET,
+            output_dir=target_path
+            )
+        
+        print(f"[✓] Success: Dataset downloaded and extracted to -> {dataset_path}")
+        print("==========================================")
+        return dataset_path
+    except Exception as e:
+        print(f"[❌] CRITICAL ERROR during dataset download: {str(e)}")
+        raise e
+    
+if __name__ == "__main__":
+    download_kaggle_dataset()
 
