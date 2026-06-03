@@ -72,7 +72,7 @@ def process_single_file(args):
             chunk = removed_null_reviews(chunk)
             chunk = remove_duplicates(chunk)
 
-            local_file_path = write_parquet_chunk(df=chunk, chunk_idx=i)
+            local_file_path = write_parquet_chunk(df=chunk, chunk_idx=i, output_prefix=category)
 
             object_name=build_bronze_object_name(
                 category=category,
@@ -85,6 +85,8 @@ def process_single_file(args):
 
             if os.path.exists(local_file_path):
                 os.remove(local_file_path)
+
+            parquet_obj_str = str(parquet_object) if isinstance(parquet_object, list) else parquet_object
 
             record_lineage(
                 source_file=file_name,
@@ -104,9 +106,16 @@ def process_single_file(args):
 
     except Exception as e:
         error_message = f"CRITICAL ERROR in file {file_name}: {str(e)}"
-
         logger.error(error_message)
         
+        safe_df = chunk
+        if isinstance(chunk, list):
+            import pandas as pd
+            try:
+                safe_df = pd.DataFrame(chunk)
+            except Exception:
+                safe_df = pd.DataFrame([{"raw_data_error": str(chunk)}])
+
         write_to_dlq(
             df=chunk,
             source_file=file_name,
@@ -114,9 +123,10 @@ def process_single_file(args):
         )
 
         if chunk is not None:
-            shared_metrics_queue.put(("failed_rows", len(chunk)))
-
-
+            try:
+                shared_metrics_queue.put(("failed_rows", len(chunk)))
+            except Exception:
+                shared_metrics_queue.put(("failed_rows", 1))
 
 def run_pipeline():
     """Function to run the system Data Pipeline in layer Bronze"""
@@ -126,13 +136,13 @@ def run_pipeline():
 
     logger.info("Checking Storage Infrastructure (MinIO)...")
     try:
-        MinioClient()
+        print("[INFO] Kích hoạt tiến trình chính - Kiểm tra hạ tầng lưu trữ...")
+        MinioClient(auto_init=True)
         logger.info("MinIO Infrastructure is ready.")
     except Exception as e:
         logger.critical(f"Pipeline has Stopped. MinIO Initialization failed: {str(e)}")
         print(f"Không thể chạy pipeline do lỗi kết nối với MinIO Server. Hãy chắc chắn đã bật MinIO trên Bash")
         return
-    
     
     dataset_path = download_kaggle_dataset()
 
@@ -147,6 +157,7 @@ def run_pipeline():
     task_args = [(file, shared_metrics_queue) for file in input_files]
 
     logger.info(f"Processing {len(input_files)} files with {MAX_WORKERS} workers...")
+    
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
         list(tqdm(executor.map(process_single_file, task_args), total=len(input_files)))
 
