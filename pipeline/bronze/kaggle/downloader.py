@@ -15,7 +15,7 @@ def download_kaggle_dataset():
         f"Downloading dataset {KAGGLE_DATASET}"
     )
 
-    dataset_path = kagglehub.dataset_download(KAGGLE_DATASET, force=True)
+    dataset_path = kagglehub.dataset_download(KAGGLE_DATASET)
 
     print(
         f"Dataset downloaded to {dataset_path}"
