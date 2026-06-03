@@ -17,7 +17,7 @@ def upload_parquet_file(local_path, object_name):
     storage.upload_file(
         bucket_name=RAW_BUCKET_NAME, 
         object_name=object_name, 
-        local_path=local_path
+        file_path=local_path
     )
     return object_name
 
