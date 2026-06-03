@@ -1,16 +1,19 @@
-# Tourist Behavior & Hospitality Analysis
+# E-COMMERCE AMAZONE REVIEW CHATBOX
 
-This project analyzes tourist behavior and hospitality services using publicly available APIs.
+This project analyzes then sentiments for customer and use the Amazon review dataset on Kaggle for analyst and I using the review customer for Natural Language Processing (NLP) for training the chatbox using RAG module to import with the this Repository. The second Repository I will using for training that NLP and connection the dataset in this pipeline. 
 
-## Data Sources
-- OpenTripMap API
-- Yelp Fusion API
+## Dataset and Architecture
+- Kaggle Dataset
+- MinIO
+- PosgreSQL
+- RAG
+- Airflow
+- Streamlit
+- ChromeDB
+- Fast API
 
 ## Key Objectives
-- Analyze rating vs popularity
-- Explore location-based insights
-- Support tourism and hospitality decision-making
-
-## Data Compliance
-All data is collected via official public APIs.
-No personal or proprietary data is used.
+- Analyze rating vs popularity for any product
+- Explore product in best choice
+- Support customer to choose a product at good
+- Suggestion product for customer
