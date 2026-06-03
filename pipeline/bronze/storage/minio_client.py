@@ -6,7 +6,7 @@ from minio.error import S3Error
 from configs.settings import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_SECURE
 
 class MinioClient:
-    def __init__(self):
+    def __init__(self, auto_init=False):
         self.client = Minio(
             endpoint=MINIO_ENDPOINT,
             access_key=MINIO_ACCESS_KEY,
@@ -15,7 +15,8 @@ class MinioClient:
         )
 
         self.required_buckets = ["bronze", "silver", "gold"]
-        self._auto_init_buckets()
+        if auto_init:
+            self._auto_init_buckets()
 
     def _auto_init_buckets(self):
         """Function locally automatically creates the required buckets if they don't exist."""
