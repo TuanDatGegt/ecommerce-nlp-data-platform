@@ -36,7 +36,7 @@ LINEAGE_OBJECT_NAME=os.getenv("LINEAGE_OBJECT_NAME")
 #Lấy dia chi luu data trong repo
 KAGGLEHUB_CACHE_DIR = os.getenv("KAGGLEHUB_CACHE_DIR")
 
-os.environ("KAGGLEHUB_CACHE_DIR") = KAGGLEHUB_CACHE_DIR
+os.environ["KAGGLEHUB_CACHE_DIR"] = KAGGLEHUB_CACHE_DIR
 
 def init_repo_directory(dir_path):
     if not os.path.exists(dir_path):
