@@ -32,3 +32,20 @@ MINIO_SECURE = os.getenv('MINIO_SECURE', 'False').lower() == 'true'
 RAW_BUCKET_NAME=os.getenv("RAW_BUCKET_NAME")
 CHECKPOINT_OBJECT = os.getenv("CHECKPOINT_OBJECT")
 LINEAGE_OBJECT_NAME=os.getenv("LINEAGE_OBJECT_NAME")
+
+#Lấy dia chi luu data trong repo
+KAGGLEHUB_CACHE_DIR = os.getenv("KAGGLEHUB_CACHE_DIR")
+
+os.environ("KAGGLEHUB_CACHE_DIR") = KAGGLEHUB_CACHE_DIR
+
+def init_repo_directory(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+        print(f"[SYSTEM] Inititalized path dir temp: '{dir_path}'")
+    gitkeep_path = os.path.join(dir_path, ".gitkeep")
+    if os.path.exists(gitkeep_path):
+        with open(gitkeep_path, "w", encoding='utf-8') as f:
+            f.write("# File dùng để giữ chỗ thư mục trên Git Repo. Không xóa file này.\n")
+        print(f" [Hệ thống] Đã tạo file giữ chỗ '{gitkeep_path}' thành công.")
+
+init_repo_directory(KAGGLEHUB_CACHE_DIR)
