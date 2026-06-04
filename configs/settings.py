@@ -1,12 +1,31 @@
 #config/settings.py
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+env_Path = PROJECT_ROOT/".env"
+
+load_dotenv(dotenv_path=env_Path)
+
+raw_tempdir = os.getenv("BRONZE_TEMPDIR_PATH", "./.data_cache/tempdir")
+
+# 4. FIX CHUẨN XÁC: Thay thế chuỗi mồi "./" một cách tường minh để giữ lại dấu "." của ".data_cache"
+if raw_tempdir.startswith("./"):
+    clean_path = raw_tempdir[2:] # Cắt chính xác 2 ký tự đầu tiên
+elif raw_tempdir.startswith(".\\"):
+    clean_path = raw_tempdir[2:]
+else:
+    clean_path = raw_tempdir
+
+# Chuẩn hóa dấu xẹt theo hệ điều hành Windows
+clean_path = clean_path.replace("/", os.sep).replace("\\", os.sep)
+TEMPDIR_PATH = str((PROJECT_ROOT / clean_path).resolve())
+print(f"[CONFIG] Bronze Temp Directory đã được ép về: {TEMPDIR_PATH}")
 
 DATA_LAKE_PATH = os.getenv('DATA_LAKE_PATH')
 SAMPLE_DATA_PATH = os.getenv('SAMPLE_DATA_PATH')
-
 yaml_config_path = os.getenv('YAML_CONFIG_PATH')
 
 MANIFEST_PATH = os.getenv('MANIFEST_PATH')
