@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
@@ -34,7 +35,7 @@ from pipeline.bronze.monitoring.metrics import PipelineMetrics
 from pipeline.bronze.monitoring.lineage import record_lineage
 from pipeline.bronze.dlq.dead_letter_queue import write_to_dlq
 from utils.logger import setup_logger
-from configs.settings import MAX_WORKERS
+from configs.settings import MAX_WORKERS, SAMPLE_DATA_PATH
 
 logger = setup_logger(
     "bronze_pipeline",
@@ -51,11 +52,8 @@ def process_single_file(args):
 
     category = extract_category_from_filename(file_name)
    
-
     if is_processed(file_name):
-        logger.info(
-            f"SKIPPED: {file_name}"
-        )
+        logger.info(f"SKIPPED: {file_name}")
         return
     
     chunk = None
@@ -73,7 +71,7 @@ def process_single_file(args):
             chunk = remove_duplicates(chunk)
 
             local_file_path = write_parquet_chunk(df=chunk, chunk_idx=i, output_prefix=category)
-
+            
             object_name=build_bronze_object_name(
                 category=category,
                 year=year,
@@ -82,15 +80,32 @@ def process_single_file(args):
             )
 
             parquet_object = upload_parquet_file(local_file_path, object_name)
+            parquet_obj_str = str(parquet_object) if isinstance(parquet_object, list) else parquet_object
+
+            if i==0:
+                os.makedirs(SAMPLE_DATA_PATH, exist_ok=True)
+                sample_file_name = f"{category}_sample_part00000.parquet"
+                sample_file_path = os.path.join(SAMPLE_DATA_PATH, sample_file_name)
+
+                try:
+                    shutil.copy2(local_file_path, sample_file_path)
+                    logger.info(f"[SAMPLE CREATED] Saved local sample data to -> {sample_file_path}")
+                except Exception as sample_err:
+                    logger.warning(f"[SAMPLE WARNING] Không thể tạo sample local: {str(sample_err)}")
 
             if os.path.exists(local_file_path):
-                os.remove(local_file_path)
+                try:
+                    os.remove(local_file_path)
+                    parent_dir = os.path.dirname(local_file_path)
+                    if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                        os.rmdir(parent_dir)
+                except Exception as clean_err:
+                    logger.debug(f"Can not delete temp file {local_file_path}: {clean_err}")
 
-            parquet_obj_str = str(parquet_object) if isinstance(parquet_object, list) else parquet_object
 
             record_lineage(
                 source_file=file_name,
-                parquet_objects=parquet_object,
+                parquet_objects=parquet_obj_str,
                 category=category,
                 row_count=len(chunk),
                 chunk_idx=i
@@ -98,14 +113,15 @@ def process_single_file(args):
 
             shared_metrics_queue.put(("rows", len(chunk)))
             shared_metrics_queue.put(("chunks", 1))
-            logger.info(f"SUCCESS: {parquet_object}")
-
+            logger.info(f"SUCCESS PUSH TO MINIO: {parquet_obj_str}")
+    
         mark_processed(file_name)
         shared_metrics_queue.put(("files", 1))
         logger.info(f"COMPLETED FILE: {file_name}")
 
     except Exception as e:
-        error_message = f"CRITICAL ERROR in file {file_name}: {str(e)}"
+        error_str = str(e)
+        error_message = f"CRITICAL ERROR in file {file_name}: {error_str}"
         logger.error(error_message)
         
         safe_df = chunk
@@ -117,9 +133,9 @@ def process_single_file(args):
                 safe_df = pd.DataFrame([{"raw_data_error": str(chunk)}])
 
         write_to_dlq(
-            df=chunk,
+            df=safe_df,
             source_file=file_name,
-            error_message=str(e)
+            error_message=error_str
         )
 
         if chunk is not None:
@@ -133,6 +149,19 @@ def run_pipeline():
     logger.info("==========================================")
     logger.info("   STARTING AMAZON REVIEWS BRONZE PIPELINE ")
     logger.info("==========================================")
+
+    DATASET_CHECKPOINT_KEY = "AMAZON_DATASET_FULLY_INGESTED"
+
+    if is_processed(DATASET_CHECKPOINT_KEY):
+        logger.info("[✓] SKIP PIPELINE: Toàn bộ Dataset đã được nạp thành công lên MinIO trong quá khứ.")
+        print("\n[INFO] Hệ thống phát hiện dữ liệu đã nằm an toàn trên MinIO Layer Bronze.")
+        print("[INFO] Bỏ qua bước download Kaggle và trích xuất dữ liệu để tiết kiệm tài nguyên.\n")
+
+        # In tóm tắt nhanh từ hệ thống metrics (nếu cần) và kết thúc luôn
+        logger.info("==========================================")
+        logger.info("        PIPELINE COMPLETED (SKIPPED)      ")
+        logger.info("==========================================")
+        return
 
     logger.info("Checking Storage Infrastructure (MinIO)...")
     try:
