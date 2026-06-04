@@ -14,7 +14,11 @@ class MinioClient:
             secure=MINIO_SECURE
         )
 
-        self.required_buckets = ["bronze", "silver", "gold"]
+        self.required_buckets = [
+            "ecommerce-reviews-bronze", 
+            "ecommerce-reviews-silver", 
+            "ecommerce-reviews-gold"
+        ]
         if auto_init:
             self._auto_init_buckets()
 
