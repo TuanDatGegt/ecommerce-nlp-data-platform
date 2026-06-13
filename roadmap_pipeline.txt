@@ -1,0 +1,1241 @@
+VERSION 1:
+
+                ┌────────────────────┐
+                │   RAW DATA (TSV)   │
+                │  Amazon Reviews    │
+                └─────────┬──────────┘
+                          │
+                          ▼
+        ┌────────────────────────────────┐
+        │  PHASE 1: DATA PROCESSING      │
+        │  - Chunk processing            │
+        │  - Clean data                  │
+        │  - Extract category            │
+        │  - Convert → Parquet           │
+        └─────────┬──────────────────────┘
+                  │
+                  ▼
+        ┌────────────────────────────────┐
+        │  PHASE 2: STREAMING (FAKE)     │
+        │  - Read chunk                  │
+        │  - Sample data                 │
+        │  - Process real-time style     │
+        └─────────┬──────────────────────┘
+                  │
+                  ▼
+        ┌──────────────────────────────────────────┐
+        │  PHASE 3: DATA LAKE (S3)                 │
+        │  - Upload Parquet                        │
+        │  - Partition theo category               │
+        │                                          │
+        │  :contentReference[oaicite:0]{index=0}   │
+        └─────────┬────────────────────────────────┘
+                  │
+                  ▼
+        ┌───────────────────────────────────────────┐
+        │  PHASE 4: QUERY LAYER                     │
+        │  - Create external table                  │
+        │  - Query bằng SQL                         │
+        │                                           │
+        │  :contentReference[oaicite:1]{index=1}    │
+        └─────────┬─────────────────────────────────┘
+                  │
+                  ▼
+        ┌────────────────────────────────┐
+        │  PHASE 5: NLP (OPTIONAL)       │
+        │  - Sentiment analysis          │
+        │  - Clean text                  │
+        │  - Enrich data                 │
+        └─────────┬──────────────────────┘
+                  │
+                  ▼
+        ┌──────────────────────────────────────────┐
+        │  PHASE 6: STORAGE (OPTIONAL)             │
+        │  - Save clean data                       │
+        │                                          │
+        │  :contentReference[oaicite:2]{index=2}   │
+        └─────────┬────────────────────────────────┘
+                  │
+                  ▼
+        ┌────────────────────────────────┐
+        │  PHASE 7: ANALYTICS            │
+        │  - KPI                         │
+        │  - Dashboard                   │
+        │  - Insight                     │ 
+        └────────────────────────────────┘
+
+
+====================================================================================================================================================================================================================
+
+        [ NGUỒN DỮ LIỆU: 37 FILE TSV ]
+       │
+       ▼
+[ BƯỚC 0: ORCHESTRATION & STATE CONTROL ] <────────────────┐
+│   (Script Python quản lý trạng thái file tại Local DB)   │
+│   - Check status: Pending / Processing / Done / Failed   │ (Vòng lặp điều phối)
+│   - Chỉ chọn 1-2 file để đẩy lên AWS mỗi lần.            │
+└──────┬───────────────────────────────────────────────────┘
+       │
+       ▼
+[ STAGE 1: BRONZE (AWS S3 - RAW ZONE) ]
+│   - Action: Convert TSV -> Parquet (Nén dữ liệu để tiết kiệm S3).
+│   - Storage: Lưu tạm thời trên S3 Bucket (Data Lake).
+└──────┬───────────────────────────────────────────────────
+       │
+       ▼ (Fake Streaming: Đọc từng phần dữ liệu từ S3 về Local)
+       │
+[ STAGE 2: SILVER (LOCAL - CLEANING & VALIDATION) ] ────▶ [ DEAD LETTER QUEUE (DLQ) ]
+│   - Validation Gates (Cửa chặn dữ liệu lỗi):            (Lưu các bản ghi bị loại)
+│       * Filter 1: ID rỗng (Customer/Product/Review).    - Log lỗi cụ thể (JSON)
+│       * Filter 2: Logic vô lý (Helpful > Total votes). - Giữ lại để debug sau.
+│   - Text Pre-processing:
+│       * Clean HTML, Detect Language (Chỉ giữ English).
+└──────┬───────────────────────────────────────────────────
+       │
+       ▼ (Dữ liệu sạch được chia làm 2 nhánh xử lý song song)
+       │
+┌──────┴────────────────────────────────────────────────────┐
+│ [ NHÁNH A: ANALYTICS PATH ]         [ NHÁNH B: AI & NLP PATH ]
+│ (Dữ liệu cấu trúc/Định lượng)        (Dữ liệu văn bản/Nội dung)
+│          │                                     │
+▼          ▼                                     ▼
+[ STAGE 3A: GOLD (RELATIONAL) ]       [ STAGE 3B: GOLD (UNSTRUCTURED) ]
+│ - SQL DB (PostgreSQL/SQL Server)    │ - NLP Model (BERT/RoBERTa/LLM)
+│ - Lưu: Review_ID, Rating, Date,     │ - Trình trích xuất: Sentiment, Aspects
+│   Customer_ID, Category...          │ - Vector Embedding (Review Body)
+└──────────┬──────────────────────────┴──────────┬───────────┘
+           │                                     │
+           ▼                                     ▼
+[ STAGE 4: STORAGE LAYER ]            [ STAGE 5: VECTOR STORAGE ]
+│ (Lưu trữ quan hệ bền vững)           │ (ChromaDB / FAISS / Pinecone)
+│ - Phục vụ Dashboards                 │ - Phục vụ tìm kiếm ngữ nghĩa
+└──────────┬──────────────────────────┴──────────┬───────────┘
+           │                                     │
+           ▼                                     ▼
+[ STAGE 6: CONSUMPTION LAYER ] <─────────────────┘
+│   - Dashboard: Theo dõi xu hướng Rating, Helpful ratio.
+│   - Web Chatbot: RAG (Kết hợp dữ liệu SQL + Vector DB).
+│   - User Feedback Loop: Đẩy phản hồi chatbot về Stage 0.
+└────────────────────────────────────────────────────────────
+
+===========================================================================================================================================================================================================================
+VERSION 3:
+
+[ DATA SOURCE: 37 TSV FILES (RAW REVIEWS DATASET) ]
+│
+│  (Local Storage / External Dataset)
+│
+▼
+[ STAGE 0: ORCHESTRATION & CONTROL LAYER ]
+│
+│ Tool: Apache Airflow (local, Docker)
+│
+│ - Quản lý DAG pipeline:
+│     + ingest_data
+│     + transform_data
+│     + load_data
+│     + train_embedding
+│     + serve_api
+│
+│ - Theo dõi trạng thái:
+│     Pending / Running / Success / Failed
+│
+│ - Retry tự động nếu fail
+│
+▼
+[ STAGE 1: DATA INGESTION (BRONZE LAYER) ]
+│
+│ Input:
+│     37 TSV files
+│
+│ Process:
+│     - Read TSV theo chunk
+│     - Convert → Parquet (nén)
+│     - Chuẩn hóa schema
+│
+│ Tool:
+│     Python + DuckDB
+│
+│ Output:
+│     Parquet files
+│
+│ Storage:
+│     AWS S3 (hoặc Local MinIO)
+│
+│ Partition:
+│     /year=YYYY/month=MM/
+│
+▼
+[ STAGE 2: DATA CLEANING & VALIDATION (SILVER LAYER) ]
+│
+│ Tool:
+│     DuckDB (query trực tiếp Parquet)
+│
+│ Validation:
+│     - Remove null ID (customer/product/review)
+│     - Remove invalid logic:
+│         helpful_votes > total_votes
+│     - Remove duplicate reviews
+│
+│ Text Processing:
+│     - Remove HTML
+│     - Normalize text
+│     - Detect language (keep English)
+│
+│ Output:
+│     Cleaned Parquet
+│
+│ Error Handling:
+│     → Dead Letter Queue (DLQ)
+│     (JSON log chứa record lỗi)
+│
+▼
+[ STAGE 3: FEATURE ENGINEERING ]
+│
+│ Structured Features:
+│     - rating_avg
+│     - helpful_ratio
+│     - review_length
+│
+│ Text Features:
+│     - cleaned_review
+│     - tokenized text
+│
+│ Output:
+│     Feature-ready dataset
+│
+▼
+                ┌──────────────────────────────┐
+                │                              │
+                ▼                              ▼
+
+[ PATH A: ANALYTICS PIPELINE ]     [ PATH B: AI / NLP PIPELINE ]
+
+│                                      │
+▼                                      ▼
+
+[ STAGE 4A: DATA WAREHOUSE ]       [ STAGE 4B: NLP PROCESSING ]
+│                                  │
+│ Tool: PostgreSQL                 │ Tool: HuggingFace + Embedding model
+│                                  │
+│ Schema: Star Schema              │ Process:
+│                                  │   - Sentiment Analysis
+│ Tables:                          │   - Aspect Extraction (optional)
+│   - fact_reviews                 │   - Generate Embeddings
+│   - dim_product                  │
+│   - dim_customer                 │ Output:
+│   - dim_date                     │   Vector embeddings
+│                                  │
+│ Output:                          ▼
+│   Structured data               [ STAGE 5B: VECTOR DATABASE ]
+│                                  │
+▼                                  │ Tool:
+[ STAGE 5A: BI DASHBOARD ]          │   ChromaDB / FAISS
+│                                  │
+│ Tool:                            │ Storage:
+│   Metabase                       │   embedding + metadata
+│                                  │
+│ Features:                        │
+│   - Rating distribution          │
+│   - Trend over time              │
+│   - Top products                 │
+│                                  │
+└──────────────┬───────────────────┴──────────────┐
+               │                                  │
+               ▼                                  ▼
+
+         [ STAGE 6: API LAYER (BACKEND SERVICE) ]
+         │
+         │ Tool: FastAPI
+         │
+         │ Endpoints:
+         │
+         │ 1. /analytics
+         │    → Query PostgreSQL
+         │
+         │ 2. /recommend
+         │    → Hybrid:
+         │       + SQL filtering
+         │       + Vector similarity
+         │
+         │ 3. /chat
+         │    → RAG Pipeline:
+         │       - Retrieve from Vector DB
+         │       - Generate answer (LLM)
+         │
+         │ Output:
+         │   JSON API
+         │
+         ▼
+
+[ STAGE 7: STREAMLIT UI (FRONTEND) ]
+│
+│ Tool: Streamlit
+│
+│ Components:
+│
+│ ├── 📊 DASHBOARD PAGE
+│ │     - Rating distribution
+│ │     - Review trends
+│ │     - Product insights
+│ │
+│ ├── 🎯 RECOMMENDATION PAGE
+│ │     - Input keyword
+│ │     - Show recommended products
+│ │     - Display rating + review
+│ │
+│ ├── 🤖 CHATBOT PAGE (RAG)
+│ │     - User hỏi về sản phẩm
+│ │     - AI trả lời dựa trên review
+│ │
+│ ├── 👍 FEEDBACK SYSTEM
+│ │     - User đánh giá câu trả lời
+│ │
+│
+▼
+[ STAGE 8: FEEDBACK LOOP ]
+│
+│ Store:
+│   - user_query
+│   - chatbot_response
+│   - feedback
+│
+│ Storage:
+│   PostgreSQL / log table
+│
+│ Usage:
+│   - Improve recommendation
+│   - Retrain model
+│   - Improve RAG
+│
+▼
+[ STAGE 9: MONITORING & LOGGING ]
+│
+│ - Pipeline logs
+│ - Error logs (DLQ)
+│ - API logs
+│
+│ Tool:
+│   Logging file / simple dashboard
+│
+▼
+[ FINAL OUTPUT ]
+│
+│ ✔ Data Warehouse (PostgreSQL)
+│ ✔ Vector DB (ChromaDB)
+│ ✔ Dashboard (Metabase / Streamlit)
+│ ✔ AI Chatbot (RAG)
+│ ✔ Recommendation System
+│ ✔ Full Web App
+
+============================================================================================================================================================================================================================
+VERSION 4:
+
+================================================================================
+               ENTERPRISE REVIEW ANALYTICS + RAG PLATFORM (2-REPO ARCHITECTURE)
+================================================================================
+
+GOAL:
+Build a production-style end-to-end system from 37 TSV raw review files:
+- Data Engineering Pipeline
+- Analytics Dashboard
+- Recommendation Engine
+- AI Chatbot (RAG)
+- Separate NLP Research / Training Environment
+- Deployable Product Architecture
+
+================================================================================
+                           HIGH LEVEL SYSTEM DESIGN
+================================================================================
+
+                     ┌────────────────────────────┐
+                     │        REPO 2             │
+                     │   NLP / MODEL LAB         │
+                     │ (WSL Ubuntu Preferred)    │
+                     └────────────┬──────────────┘
+                                  │
+                                  │ Export Trained Artifacts
+                                  │
+                                  ▼
+
+                     ┌────────────────────────────┐
+                     │        REPO 1             │
+                     │ PRODUCT / PLATFORM        │
+                     │ (Docker Production App)   │
+                     └────────────────────────────┘
+
+Users only interact with REPO 1.
+
+REPO 2 is for experimentation / training / model upgrades.
+
+================================================================================
+                              REPO 1 (PRODUCT)
+================================================================================
+
+Folder Structure:
+
+review-platform/
+│
+├── airflow/                  # DAG pipelines
+├── backend/                  # FastAPI APIs
+├── frontend/                 # Streamlit UI
+├── warehouse/                # SQL models / schema
+├── vector_store/             # Chroma persistent storage
+├── models/                   # Model artifacts imported from Repo 2
+├── logs/
+├── docker-compose.yml
+├── Dockerfile.api
+├── Dockerfile.ui
+└── .env
+
+
+================================================================================
+                           REPO 2 (NLP / MODEL LAB)
+================================================================================
+
+Folder Structure:
+
+review-nlp-lab/
+│
+├── notebooks/               # Jupyter experiments
+├── train/
+│   ├── train_embedding.py
+│   ├── train_sentiment.py
+│   └── train_reranker.py
+│
+├── evaluate/
+│   ├── benchmark.py
+│   └── metrics.py
+│
+├── prompts/
+├── experiments/
+├── outputs/
+│   ├── embedding_v1/
+│   ├── sentiment_v1/
+│   └── reranker_v1/
+└── requirements.txt
+
+
+================================================================================
+                           FULL DATA PIPELINE FLOW
+================================================================================
+
+[ DATA SOURCE ]
+37 TSV RAW REVIEW FILES
+(Local disk / external dataset)
+
+Fields example:
+- review_id
+- product_id
+- customer_id
+- rating
+- review_text
+- review_date
+- helpful_votes
+- total_votes
+
+================================================================================
+STAGE 0: ORCHESTRATION LAYER
+================================================================================
+
+Tool:
+Apache Airflow (Docker)
+
+Purpose:
+Manage all scheduled pipelines.
+
+DAGs:
+
+1. ingest_data
+2. clean_transform_data
+3. load_warehouse
+4. build_embeddings
+5. refresh_vector_db
+6. serve_api
+7. daily_monitoring
+
+Features:
+
+- Retry on failure
+- Task dependency graph
+- Logs each stage
+- Manual rerun
+- Email alert (optional)
+
+================================================================================
+STAGE 1: BRONZE LAYER - RAW INGESTION
+================================================================================
+
+Input:
+37 TSV files
+
+Process:
+
+1. Read files in chunks
+2. Standardize schema
+3. Convert TSV -> Parquet
+4. Compress storage
+5. Add metadata:
+   - source_file
+   - ingest_time
+
+Tool:
+
+- Python
+- DuckDB
+- Pandas (optional)
+
+Output:
+
+/bronze/reviews/year=YYYY/month=MM/*.parquet
+
+Storage:
+
+- Local MinIO
+or
+- AWS S3
+
+Why:
+
+- Faster query than TSV
+- Better storage efficiency
+
+================================================================================
+STAGE 2: SILVER LAYER - CLEANING & VALIDATION
+================================================================================
+
+Tool:
+DuckDB querying parquet directly
+
+Validation Rules:
+
+1. Remove null product_id
+2. Remove null review_text
+3. Remove invalid ratings (<1 or >5)
+4. Remove duplicate review_id
+5. Remove rows:
+   helpful_votes > total_votes
+
+Text Cleaning:
+
+1. Strip HTML tags
+2. Lowercase normalize
+3. Remove strange symbols
+4. Detect language
+5. Keep English only
+
+Error Records:
+
+Invalid rows sent to:
+
+/dlq/error_rows.json
+
+Output:
+
+/silver/reviews_clean/*.parquet
+
+================================================================================
+STAGE 3: FEATURE ENGINEERING
+================================================================================
+
+Structured Features:
+
+- review_length
+- helpful_ratio
+- rating_bucket
+- sentiment_proxy
+- review_age_days
+
+Text Features:
+
+- cleaned_text
+- tokens
+- ngrams (optional)
+
+Output:
+
+/gold/features/*.parquet
+
+================================================================================
+                 SPLIT INTO TWO BUSINESS PATHS
+================================================================================
+
+PATH A = ANALYTICS
+PATH B = AI / NLP / CHATBOT
+
+================================================================================
+PATH A - ANALYTICS SYSTEM
+================================================================================
+
+STAGE 4A: DATA WAREHOUSE LOAD
+
+Tool:
+PostgreSQL
+
+Schema:
+
+FACT TABLE:
+fact_reviews
+
+DIMENSIONS:
+dim_product
+dim_customer
+dim_date
+
+Metrics:
+
+- avg_rating
+- review_count
+- helpfulness_score
+
+Load Mode:
+
+- Incremental batch
+
+================================================================================
+STAGE 5A: BI DASHBOARD
+================================================================================
+
+Tools:
+
+- Metabase
+or
+- Streamlit Dashboard
+
+Pages:
+
+1. Rating Distribution
+2. Review Trend Over Time
+3. Top Products
+4. Worst Rated Products
+5. Most Helpful Reviews
+6. Seasonal Trends
+
+================================================================================
+PATH B - AI / NLP SYSTEM
+================================================================================
+
+STAGE 4B: MODEL DEVELOPMENT (REPO 2)
+
+Runs in WSL Ubuntu
+
+Purpose:
+
+Train / evaluate models.
+
+Tasks:
+
+1. Embedding model selection
+2. Fine-tuning sentence transformer
+3. Sentiment classifier training
+4. Reranker experiments
+5. Prompt engineering for chatbot
+
+Outputs (Artifacts):
+
+outputs/
+├── embedding_v3/
+├── sentiment_v2/
+├── reranker_v1/
+└── prompt_config.json
+
+================================================================================
+STAGE 5B: MODEL PROMOTION TO PRODUCT
+================================================================================
+
+Move best artifacts from Repo 2 -> Repo 1
+
+Example:
+
+review-platform/models/
+├── embedding_current/
+├── sentiment_current/
+└── reranker_current/
+
+Methods:
+
+- Copy local folder
+- Shared drive
+- MinIO bucket
+- S3 model registry
+
+Only approved stable models move to product repo.
+
+================================================================================
+STAGE 6B: VECTOR DATABASE BUILD
+================================================================================
+
+Inside Repo 1 Product
+
+Tool:
+
+- ChromaDB
+or
+- FAISS
+
+Input:
+
+cleaned reviews + embedding model
+
+Process:
+
+For each review:
+
+vector = embedding_model.encode(cleaned_review)
+
+Store:
+
+- vector
+- review_id
+- product_id
+- rating
+- metadata
+
+Purpose:
+
+Semantic search for chatbot / recommendation.
+
+================================================================================
+STAGE 7: API BACKEND SERVICE
+================================================================================
+
+Tool:
+FastAPI
+
+Dockerized in Repo 1
+
+Endpoints:
+
+1. /analytics
+
+Query PostgreSQL
+
+Examples:
+- top products
+- trend data
+
+--------------------------------------------------
+
+2. /recommend
+
+Hybrid recommendation:
+
+- SQL filter:
+   rating >= 4
+- Vector similarity:
+   similar user query
+
+--------------------------------------------------
+
+3. /chat
+
+RAG FLOW:
+
+Step 1:
+Receive user question
+
+Step 2:
+Use embedding_current model
+
+query_vector = encode(question)
+
+Step 3:
+Search top-k in ChromaDB
+
+Step 4:
+Pass retrieved reviews + question to LLM
+
+Step 5:
+Generate grounded answer
+
+Step 6:
+Return JSON response
+
+--------------------------------------------------
+
+4. /feedback
+
+Store user thumbs up/down
+
+================================================================================
+STAGE 8: STREAMLIT FRONTEND
+================================================================================
+
+Pages:
+
+1. Dashboard
+
+- KPIs
+- Charts
+- Product insights
+
+--------------------------------------------------
+
+2. Recommendation Page
+
+Input:
+"I need long battery phone"
+
+Output:
+Suggested products with ratings
+
+--------------------------------------------------
+
+3. Chatbot Page
+
+User asks:
+
+"Which laptop has good battery and keyboard?"
+
+System returns answer based on reviews.
+
+--------------------------------------------------
+
+4. Feedback Page
+
+Collect user evaluation
+
+================================================================================
+STAGE 9: CHATBOT INTERNAL FLOW (IMPORTANT)
+================================================================================
+
+User enters message
+        │
+        ▼
+Streamlit Chat UI
+        │
+        ▼
+POST /chat (FastAPI)
+        │
+        ▼
+Load model from Repo1/models/
+        │
+        ▼
+Embedding model converts query -> vector
+        │
+        ▼
+Search ChromaDB top relevant reviews
+        │
+        ▼
+Send context + question to LLM
+        │
+        ▼
+Generate response
+        │
+        ▼
+Return answer to user
+
+NOTE:
+
+Repo 2 is NOT called live during chat.
+Only trained artifacts from Repo 2 are used.
+
+================================================================================
+STAGE 10: FEEDBACK LOOP
+================================================================================
+
+Store:
+
+- user_query
+- retrieved_docs
+- chatbot_answer
+- feedback_score
+
+In PostgreSQL table:
+
+chat_feedback_logs
+
+Usage:
+
+- Improve retrieval quality
+- Detect hallucination
+- Re-train reranker
+- Update prompts
+
+================================================================================
+STAGE 11: MONITORING
+================================================================================
+
+Logs:
+
+1. Airflow pipeline logs
+2. API latency logs
+3. Chat errors
+4. DB usage
+5. Model version usage
+
+Optional Tools:
+
+- Grafana
+- Prometheus
+- ELK
+
+================================================================================
+DOCKER DEPLOYMENT (REPO 1)
+================================================================================
+
+docker-compose.yml services:
+
+1. postgres
+2. fastapi
+3. streamlit
+4. chromadb
+5. airflow
+6. nginx (optional)
+
+Run:
+
+docker compose up -d
+
+================================================================================
+WHY 2 REPOS IS BETTER
+================================================================================
+
+REPO 1:
+Stable production system
+
+REPO 2:
+Messy experimentation allowed safely
+
+Benefits:
+
+- No dependency conflicts
+- Smaller production image
+- Cleaner Git history
+- Easier recruiter storytelling
+- Real enterprise architecture
+
+================================================================================
+FINAL OUTPUT
+================================================================================
+
+✔ Automated ETL Pipeline
+✔ Clean Data Lake (Parquet)
+✔ PostgreSQL Warehouse
+✔ Dashboard System
+✔ Recommendation Engine
+✔ Chroma Vector Search
+✔ RAG Chatbot
+✔ Separate NLP Training Lab
+✔ Docker Deployable Product
+✔ Production-grade Portfolio Project
+
+================================================================================
+
+================================================================================================================================================================================================================================================
+folder tree 
+review-platform/
+│
+├── airflow/
+│   ├── dags/
+│   │   └── bronze_ingestion_dag.py
+│   │
+│   ├── logs/
+│   └── plugins/
+│
+├── configs/
+│   ├── settings.py
+│   ├── config.yaml
+│   └── schemas/
+│       └── review_schema.py
+│
+├── data/
+│   ├── raw/
+│   ├── bronze/
+│   ├── silver/
+│   ├── gold/
+│   └── dlq/
+│
+├── pipelines/
+│   ├── bronze/
+│   │   ├── ingest.py
+│   │   ├── transform.py
+│   │   ├── validate.py
+│   │   ├── writer.py
+│   │   └── metadata.py
+│   │
+│   ├── silver/
+│   └── gold/
+│
+├── utils/
+│   ├── logger.py
+│   ├── file_utils.py
+│   └── parquet_utils.py
+│
+├── scripts/
+│   └── run_bronze_ingestion.py
+│
+├── logs/
+│
+├── docker/
+│   ├── Dockerfile.airflow
+│   ├── Dockerfile.pipeline
+│   └── requirements.txt
+│
+├── docker-compose.yml
+│
+└── .env
+
+
+==================================================================================================================
+# ENTERPRISE REVIEW ANALYTICS + RAG PLATFORM (VERSION 5)
+
+================================================================================
+           ENTERPRISE REVIEW ANALYTICS + RAG PLATFORM (2-REPO ARCHITECTURE)
+================================================================================
+
+GOAL:
+Build a production-style end-to-end system from 37 TSV raw review files:
+- Data Engineering Pipeline (Local File Lakehouse Architecture)
+- Analytics Dashboard (PostgreSQL + Streamlit)
+- Recommendation Engine (Hybrid: SQL Analytics + Vector Search)
+- AI Chatbot (RAG Workflow via FastAPI & ChromaDB)
+- Separate NLP Research / Training Environment (WSL Ubuntu / GPU Linux)
+- Deployable Product Architecture (Multi-container Docker Compose)
+
+================================================================================
+                        HIGH LEVEL SYSTEM DESIGN
+================================================================================
+
+                     ┌────────────────────────────┐
+                     │          REPO 2            │
+                     │       NLP / MODEL LAB      │
+                     │   (WSL Ubuntu / GPU Linux) │
+                     └────────────┬───────────────┘
+                                  │
+                                  │ Export Trained Artifacts (Weights & Configs)
+                                  │
+                                  ▼
+                     ┌────────────────────────────┐
+                     │          REPO 1            │
+                     │     PRODUCT / PLATFORM     │
+                     │  (Docker Production App)   │
+                     └────────────────────────────┘
+
+- Người dùng cuối và API chỉ tương tác trực tiếp với REPO 1.
+- REPO 2 đóng vai trò là môi trường R&D, thử nghiệm prompt, huấn luyện và nâng cấp model độc lập.
+
+================================================================================
+                               REPO 1 (PRODUCT)
+================================================================================
+
+Thư mục dự án chuẩn hóa (review-platform):
+
+review-platform/
+│
+├── airflow/                  # Điều phối pipeline (DAGs, logs, plugins)
+│   ├── dags/
+│   │   ├── bronze_ingestion_dag.py
+│   │   └── silver_transform_dag.py
+│   ├── logs/
+│   └── plugins/
+│
+├── configs/                  # Quản lý cấu hình tập trung
+│   ├── settings.py           # Định nghĩa các biến môi trường và PATH hệ thống
+│   ├── config.yaml
+│   └── schemas/
+│       └── review_schema.py  # Định nghĩa chặt chẽ schema dữ liệu đầu vào
+│
+├── data/                     # Data Lakehouse Layer (Kiến trúc lưu trữ File Local)
+│   ├── raw/                  # Nơi chứa 37 file TSV thô ban đầu từ Kaggle
+│   ├── bronze/               # Parquet thô (Giữ nguyên cấu trúc + Metadata + Phân vùng)
+│   ├── silver/               # Parquet sạch (Đã kiểm định chất lượng + Cleaned Text NLP)
+│   ├── gold/                 # Parquet tính năng (Features phục vụ riêng cho AI & BI)
+│   └── dlq/                  # Dead Letter Queue (Chứa các dòng lỗi định dạng JSON)
+│
+├── pipelines/                # Mã nguồn xử lý dữ liệu (ETL Core Packages)
+│   ├── bronze/               │── ingest.py, transform.py, validate.py, writer.py, metadata.py
+│   ├── silver/               │── validate.py, cleaner.py, lang_detect.py, writer.py, run_silver.py
+│   └── gold/                 └── feature_engineering.py
+│
+├── utils/                    # Tiện ích dùng chung cho toàn bộ dự án
+│   ├── logger.py             # Hệ thống Log an toàn không dấu tránh lỗi mã hóa Windows
+│   ├── file_utils.py
+│   └── parquet_utils.py
+│
+├── scripts/                  # Script thực thi nhanh từ Terminal qua flag (-m)
+│   └── run_bronze_ingestion.py
+│
+├── models/                   # Cửa ngõ nhận Model Artifacts ổn định chuyển giao từ Repo 2
+│   ├── embedding_current/
+│   ├── sentiment_current/
+│   └── reranker_current/
+│
+├── vector_store/             # ChromaDB persistent storage (Cơ sở dữ liệu Vector)
+├── logs/                     # Folder chứa log chạy app tổng hợp
+├── docker/
+│   ├── Dockerfile.airflow
+│   ├── Dockerfile.pipeline
+│   └── requirements.txt
+└── docker-compose.yml        # Điều phối production (Postgres, FastAPI, Streamlit, Airflow)
+
+================================================================================
+                             REPO 2 (NLP / MODEL LAB)
+================================================================================
+
+review-nlp-lab/
+│
+├── notebooks/                # Jupyter Notebooks phục vụ phân tích thử nghiệm EDA
+├── train/
+│   ├── train_embedding.py    # Fine-tune sentence transformers
+│   ├── train_sentiment.py    # Huấn luyện bộ phân loại sắc thái bài đánh giá
+│   └── train_reranker.py     # Tối ưu hóa mô hình xếp hạng tài liệu RAG
+│
+├── evaluate/
+│   ├── benchmark.py          # Đánh giá hiệu năng của các version model khác nhau
+│   └── metrics.py
+│
+├── prompts/                  # Quản lý và tối ưu hóa Prompt Engineering cho Chatbot
+├── experiments/              # Lưu vết các tham số cấu hình thí nghiệm
+├── outputs/                  # Đầu ra của các phiên bản model trước khi promote sang Repo 1
+│   ├── embedding_v1/
+│   ├── sentiment_v1/
+│   └── reranker_v1/
+└── requirements.txt
+
+================================================================================
+                            FULL DATA PIPELINE FLOW
+================================================================================
+
+[ DATA SOURCE ]
+37 TSV RAW REVIEW FILES
+(Lưu trữ tại thư mục data/raw/)
+
+Cấu trúc Schema gốc từ tệp dữ liệu:
+- marketplace
+- customer_id
+- review_id
+- product_id
+- product_parent
+- product_title
+- product_category
+- star_rating
+- helpful_votes
+- total_votes
+- vine
+- verified_purchase
+- review_headline
+- review_body
+- review_date
+
+--------------------------------------------------------------------------------
+STAGE 0: ORCHESTRATION LAYER
+--------------------------------------------------------------------------------
+Tool: Apache Airflow (Triển khai qua Docker) hoặc Local Script Automation.
+Purpose: Quản lý, lập lịch và giám sát toàn bộ vòng đời của dữ liệu.
+Features: 
+- Cơ chế tự động chạy lại khi gặp sự cố ngắt quãng (Retry logic).
+- Quản lý biểu đồ phụ thuộc giữa các tác vụ (Task dependency graph).
+- Tách biệt tệp log cho từng phiên chạy.
+
+--------------------------------------------------------------------------------
+STAGE 1: BRONZE LAYER - RAW INGESTION (CẬP NHẬT VERSION 5)
+--------------------------------------------------------------------------------
+Input: 37 file TSV thô từ `data/raw/`
+Process:
+1. Đọc file theo từng khối dữ liệu tuần tự (Chunking) để bảo vệ tài nguyên RAM.
+2. Chuẩn hóa Schema bề mặt (Xóa khoảng trắng thừa trong tên cột, ép kiểu thô).
+3. Chuyển đổi định dạng từ TSV sang Parquet giúp tối ưu hóa không gian lưu trữ.
+4. Nén dữ liệu hiệu năng cao bằng thuật toán Snappy.
+5. Tích hợp thêm các thuộc tính siêu dữ liệu hệ thống (Metadata):
+   - source_file: Tên tệp tin thô nguồn.
+   - ingest_time: Dấu thời gian hệ thống nạp dữ liệu vào hồ.
+6. Sử dụng cơ chế thực thi đa tiến trình (ProcessPoolExecutor) được thiết kế an toàn, 
+   loại bỏ triệt để lỗi xung đột tài nguyên Manifest/Lineage và lỗi bảng mã trên Windows.
+Output: Dữ liệu phân vùng lưu tại cấu trúc: `data/bronze/reviews/year=YYYY/month=MM/*.parquet`
+
+--------------------------------------------------------------------------------
+STAGE 2: SILVER LAYER - CLEANING & VALIDATION (CẬP NHẬT VERSION 5)
+--------------------------------------------------------------------------------
+Tool: Kết hợp hiệu năng của DuckDB (Đọc/Quét trực tiếp file Parquet không cần nạp bộ nhớ) và Pandas.
+
+Validation Rules (5 Quy tắc kiểm định chất lượng nghiêm ngặt):
+1. Loại bỏ tất cả các dòng khuyết thiếu (Null/NaN) tại hai cột trọng yếu: `product_id` và `review_body`.
+2. Loại bỏ các bản ghi có điểm đánh giá bất thường: `star_rating` nằm ngoài khoảng [1, 5].
+3. Loại bỏ các bản ghi vi phạm logic toán học: `helpful_votes` > `total_votes`.
+4. Thực thi khử trùng lặp dữ liệu chéo chẽ giữa các batch (Drop duplicates dựa trên trường `review_id`).
+
+Text Cleaning & NLP Processing (Chuẩn hóa văn bản chuyên sâu cho RAG Chatbot):
+1. Bóc tách và xóa sạch toàn bộ các thẻ HTML lỗi hoặc phát sinh khi crawl (ví dụ: `<br />`, `<div>`).
+2. Đồng bộ hóa văn bản về dạng chữ thường (Lowercase normalize).
+3. Loại bỏ các ký tự đặc biệt lạ, các chuỗi emoji gây nhiễu cho thuật toán Embedding, chỉ giữ lại bảng chữ cái, chữ số và các dấu câu cơ bản (. , ! ?).
+4. Thực thi bộ lọc phát hiện ngôn ngữ (Language Detection): Chỉ giữ lại các bài viết bằng tiếng Anh (`Keep English only`) để đảm bảo chất lượng huấn luyện mô hình ở Repo 2 không bị sai lệch ngữ cảnh.
+
+Dead Letter Queue (Quản lý dữ liệu lỗi - DLQ):
+- Toàn bộ các bản ghi vi phạm quy tắc validation hoặc sai lệch ngôn ngữ sẽ bị loại ra khỏi luồng chính, đóng gói và cách ly an toàn vào file `data/dlq/error_rows.json` dạng JSON Lines để phục vụ phân tích lỗi (Debugging).
+
+Output: Tập dữ liệu sạch hoàn toàn lưu tại: `data/silver/reviews_clean/*.parquet`
+
+--------------------------------------------------------------------------------
+STAGE 3: FEATURE ENGINEERING
+--------------------------------------------------------------------------------
+Structured Features:
+- review_length: Số lượng ký tự của bài đánh giá.
+- helpful_ratio: Tỷ lệ hữu ích của bài viết (helpful_votes / total_votes).
+- rating_bucket: Phân loại nhóm điểm số (High rating, Medium rating, Low rating).
+- review_age_days: Tuổi đời của bài đánh giá tính đến thời điểm hiện tại.
+
+Text Features:
+- cleaned_text: Trường văn bản đã tinh lọc toàn diện, sẵn sàng cho việc Vector hóa.
+
+Output: Lưu trữ tại hạ tầng `data/gold/features/*.parquet`
+
+================================================================================
+                         SPLIT INTO TWO BUSINESS PATHS
+================================================================================
+D dữ liệu tại tầng Gold Feature chính thức rẽ nhánh phục vụ hai mục tiêu chiến lược:
+
+--------------------------------------------------------------------------------
+PATH A - ANALYTICS SYSTEM (HỆ THỐNG PHÂN TÍCH BÁO CÁO)
+--------------------------------------------------------------------------------
+STAGE 4A: DATA WAREHOUSE LOAD
+- Công cụ: PostgreSQL DBMS.
+- Kiến trúc lưu trữ: Mô hình hình sao (Star Schema) tối ưu tốc độ truy vấn OLAP.
+  + FACT TABLE: fact_reviews (Lưu trữ các trường khóa ngoại kết nối và các chỉ số đo lường numeric)
+  + DIMENSION TABLES: dim_product, dim_customer, dim_date
+- Chế độ nạp (Load Mode): Nạp tăng trưởng theo lô cuốn chiếu (Incremental batch load).
+
+STAGE 5A: BI DASHBOARD
+- Công cụ: Dựng ứng dụng Dashboard tương tác bằng Streamlit.
+- Các phân hệ giao diện: Phân phối điểm số sản phẩm, Biểu đồ xu hướng đánh giá theo thời gian, Danh sách Top sản phẩm chất lượng tốt nhất / tệ nhất, Thống kê các đánh giá có độ tin cậy cao dựa trên thuộc tính hữu ích.
+
+--------------------------------------------------------------------------------
+PATH B - AI / NLP SYSTEM (HỆ THỐNG TRÍ TUỆ NHÂN TẠO & RAG CHATBOT)
+--------------------------------------------------------------------------------
+STAGE 4B: MODEL DEVELOPMENT (Thực thi độc lập tại REPO 2 - Môi trường WSL Ubuntu)
+- Nghiên cứu và lựa chọn kiến trúc mô hình Embedding phù hợp (Sentence-Transformers).
+- Thực hiện Fine-tune mô hình nhúng văn bản và kiểm thử thuật toán xếp hạng lại câu trả lời (Reranker).
+- Huấn luyện bộ phân loại cảm xúc (Sentiment Classifier) từ star_rating.
+- Thiết kế và thử nghiệm hệ thống câu lệnh điều hướng (Prompt Engineering) cho Chatbot LLM.
+- Output: Đóng gói các thư mục trọng bối (Artifacts): `outputs/embedding_v3/`, `outputs/sentiment_v2/`, `outputs/reranker_v1/`, `prompt_config.json`.
+
+STAGE 5B: MODEL PROMOTION TO PRODUCT (Chuyển giao công nghệ sang REPO 1)
+- Các cấu hình mô hình ổn định đạt chuẩn thông qua Benchmark sẽ được sao chép trực tiếp vào thư mục production: `review-platform/models/embedding_current/`, ...
+- Quá trình này đảm bảo tách biệt tuyệt đối môi trường thử nghiệm và vận hành thực tế.
+
+STAGE 6B: VECTOR DATABASE BUILD (Khởi tạo kho dữ liệu Vector tại REPO 1)
+- Hệ thống tại Repo 1 khởi chạy ngầm, sử dụng mô hình `embedding_current` để chuyển đổi toàn bộ chuỗi văn bản sạch từ tầng Gold (`cleaned_text`) thành các chuỗi Vector Embedding độ chiều cao.
+- Lưu trữ toàn bộ dữ liệu Vector kèm cặp định danh Metadata (`review_id`, `product_id`, `star_rating`) trực tiếp vào cơ sở dữ liệu lưu trữ bền vững **ChromaDB**.
+
+================================================================================
+STAGE 7: API BACKEND SERVICE (FASTAPI)
+================================================================================
+Ứng dụng API được Docker hóa chạy độc lập trong hệ sinh thái Repo 1, cung cấp 4 Endpoint nền tảng:
+1. GET `/analytics`: Thực hiện truy vấn SQL vào PostgreSQL để trả về số liệu biểu đồ cho frontend.
+2. POST `/recommend`: Hệ thống khuyến nghị lai (Hybrid Recommendation). Sử dụng SQL để lọc các sản phẩm chất lượng cao (rating >= 4) kết hợp thuật toán so sánh độ tương đồng Cosine ngữ nghĩa trên ChromaDB dựa trên gu của người dùng.
+3. POST `/chat` (LUỒNG XỬ LÝ RAG CHI TIẾT):
+   - Bước 1: Tiếp nhận câu hỏi hoặc yêu cầu từ người dùng qua Giao diện.
+   - Bước 2: Gọi mô hình nhúng nội bộ chuyển hóa câu hỏi thành Query Vector.
+   - Bước 3: Truy vấn vào ChromaDB để quét tìm Top-K bài đánh giá liên quan nhất về mặt ngữ nghĩa ngữ cảnh.
+   - Bước 4: Tổng hợp Câu hỏi gốc + Tập ngữ cảnh bài đánh giá thu được, đóng gói vào Prompt chuẩn hóa.
+   - Bước 5: Gửi Prompt tới Mô hình ngôn ngữ lớn (LLM) để sinh câu trả lời có tính căn cứ xác thực (Grounded answer), triệt tiêu hiện tượng ảo tưởng của AI (Hallucination).
+   - Bước 6: Trả kết quả định dạng JSON về giao diện.
+4. POST `/feedback`: Tiếp nhận phản hồi từ người dùng (Thumbs up/down) để đánh giá chất lượng hệ thống.
+
+================================================================================
+STAGE 8: STREAMLIT FRONTEND & STAGE 10, 11 (MONITORING & FEEDBACK)
+================================================================================
+- Giao diện Streamlit phân tách rõ ràng: Trang Dashboard số liệu, Trang Khuyến nghị mua sắm thông minh, và Cửa sổ Chatbot tương tác thời gian thực.
+- Toàn bộ lịch sử truy vấn RAG và điểm phản hồi của người dùng được lưu trữ tự động vào bảng `chat_feedback_logs` trong Postgres để phục vụ công tác tinh chỉnh và tái huấn luyện mô hình trong tương lai.
+- Toàn bộ hệ thống container (Postgres, FastAPI, Streamlit, ChromaDB, Airflow) vận hành đồng bộ và dễ dàng triển khai chỉ với một câu lệnh duy nhất:
+  $ docker compose up -d
