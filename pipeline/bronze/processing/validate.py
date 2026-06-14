@@ -17,7 +17,7 @@ def validate_rating_range(df):
         return df
     
     return df[
-        (df["star_rating"] >1) & (df["star_rating"] <=5)
+        (df["star_rating"] >=1) & (df["star_rating"] <=5)
     ]
 
 def validate_helpful_votes(df):
@@ -45,5 +45,4 @@ def remove_duplicates(df):
         return df
     
     return df.drop_duplicates(subset=["review_id"])
-
 
