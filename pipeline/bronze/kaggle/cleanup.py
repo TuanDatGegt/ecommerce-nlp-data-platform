@@ -5,7 +5,6 @@ import shutil
 
 def cleanup_files(path):
     """Remove temporary directory safely"""
-
     if not os.path.exists(path):
         print(f"[Dọn dẹp] Thư mục không tồn tại: {path}")
         return
@@ -14,7 +13,7 @@ def cleanup_files(path):
     print("[*] TIẾN HÀNH DỌN DẸP BỘ NHỚ ĐỆM LOCAL...")
     print("==========================================")
 
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(path, topdown=False):
         for file in files:
             if file==".gitkeep":
                 continue
@@ -29,12 +28,14 @@ def cleanup_files(path):
 
         for dir_name in dirs:
             dir_path = os.path.join(root, dir_name)
-            if "tempdir" in dir_name or "temp_chunks" in dir_name:
+            if "tempdir" in dir_name or "temp_chunks" in dir_name or "_tmp_" in dir_name:
                 try:
-                    shutil.rmtree(dir_path)
-                    print(f"[Delete temp file] -> {dir_name}")
+                    if os.path.exists(dir_path):
+                        shutil.rmtree(dir_path)
+                        print(f"[Delete temp file] -> {dir_name}")
                 except Exception as e:
                     print(f"[ERROR] Can not delete file {dir_path}: {e}")
+                    
     print("Complete infrastructure cleaner middleware local. Completely!")
     print("=============================================================")
 
