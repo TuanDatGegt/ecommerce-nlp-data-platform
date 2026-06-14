@@ -3,19 +3,29 @@
 import os
 import sys
 import shutil
+import uuid
 
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from tqdm import tqdm
 import multiprocessing
 
+#KAGGLE
 from pipeline.bronze.kaggle.downloader import download_kaggle_dataset
-from pipeline.bronze.storage.raw_storage import upload_parquet_file, build_bronze_object_name
-from pipeline.bronze.storage.minio_client import MinioClient
 from pipeline.bronze.kaggle.extractor import discover_tsv_files
 from pipeline.bronze.kaggle.cleanup import cleanup_files
+
+#STORAGE CONNECTORS
+from pipeline.bronze.storage.raw_storage import upload_parquet_file, build_bronze_object_name
+from pipeline.bronze.storage.minio_client import MinioClient
+from pipeline.bronze.sample.sample_writer import save_sample_chunk
+
+#PROCESSING lAYERS
 from pipeline.bronze.processing.reader import read_tsv_in_chunks
 from pipeline.bronze.processing.transform import optimize_dataframe, add_metadata_columns
+from pipeline.bronze.processing.metadata import extract_category_from_filename, build_partition_prefix
+from pipeline.bronze.processing.writer import write_parquet_chunk
+#VALIDATION LAYERS
 from pipeline.bronze.processing.validate import (
     validate_required_columns,
     validate_rating_range,
@@ -24,18 +34,18 @@ from pipeline.bronze.processing.validate import (
     remove_duplicates
 )
 
-from pipeline.bronze.processing.metadata import (
-    extract_category_from_filename,
-    build_partition_prefix
-)
-
-from pipeline.bronze.processing.writer import write_parquet_chunk
+#STATE&MORNITORING LAYERS
 from pipeline.bronze.state.checkpoint import is_processed, mark_processed
 from pipeline.bronze.monitoring.metrics import PipelineMetrics
 from pipeline.bronze.monitoring.lineage import record_lineage
 from pipeline.bronze.dlq.dead_letter_queue import write_to_dlq
+
 from utils.logger import setup_logger
 from configs.settings import MAX_WORKERS, SAMPLE_DATA_PATH
+
+from pipeline.bronze.state.checkpoint import LOCAL_MANIFEST_PATH, CHECKPOINT_OBJECT
+from pipeline.bronze.monitoring.lineage import LOCAL_LINEAGE_PATH, LINEAGE_OBJECT_NAME
+from configs.settings import BRONZE_BUCKET_NAME
 
 logger = setup_logger(
     "bronze_pipeline",
@@ -56,14 +66,16 @@ def process_single_file(args):
         logger.info(f"SKIPPED: {file_name}")
         return
     
+    file_batch_id = str(uuid.uuid4())
     chunk = None
+
     try:
         logger.info(f"START PROCESSING: {file_name}")
         reader = read_tsv_in_chunks(input_file)
 
         for i, chunk in enumerate(reader):
             chunk = optimize_dataframe(chunk)
-            chunk = add_metadata_columns(chunk, file_name)
+            chunk = add_metadata_columns(chunk, file_name, file_batch_id)
             validate_required_columns(chunk)
             chunk = validate_rating_range(chunk)
             chunk = validate_helpful_votes(chunk)
@@ -83,15 +95,7 @@ def process_single_file(args):
             parquet_obj_str = str(parquet_object) if isinstance(parquet_object, list) else parquet_object
 
             if i==0:
-                os.makedirs(SAMPLE_DATA_PATH, exist_ok=True)
-                sample_file_name = f"{category}_sample_part00000.parquet"
-                sample_file_path = os.path.join(SAMPLE_DATA_PATH, sample_file_name)
-
-                try:
-                    shutil.copy2(local_file_path, sample_file_path)
-                    logger.info(f"[SAMPLE CREATED] Saved local sample data to -> {sample_file_path}")
-                except Exception as sample_err:
-                    logger.warning(f"[SAMPLE WARNING] Không thể tạo sample local: {str(sample_err)}")
+                save_sample_chunk(local_file_path, category)
 
             if os.path.exists(local_file_path):
                 try:
@@ -153,7 +157,7 @@ def run_pipeline():
     DATASET_CHECKPOINT_KEY = "AMAZON_DATASET_FULLY_INGESTED"
 
     if is_processed(DATASET_CHECKPOINT_KEY):
-        logger.info("[✓] SKIP PIPELINE: Toàn bộ Dataset đã được nạp thành công lên MinIO trong quá khứ.")
+        logger.info("SKIP PIPELINE: All datasets have been successfully ingested to MinIO in the past.")
         print("\n[INFO] Hệ thống phát hiện dữ liệu đã nằm an toàn trên MinIO Layer Bronze.")
         print("[INFO] Bỏ qua bước download Kaggle và trích xuất dữ liệu để tiết kiệm tài nguyên.\n")
 
@@ -207,6 +211,22 @@ def run_pipeline():
 
     logger.info("Start cleaning up local middleware files...")
     cleanup_files(dataset_path)
+
+    try:
+        minio_storage = MinioClient()
+        if os.path.exists(LOCAL_MANIFEST_PATH):
+            logger.info("Syncing final pipeline manifest checkpoint to MinIO...")
+            minio_storage.upload_file(BRONZE_BUCKET_NAME, CHECKPOINT_OBJECT, LOCAL_MANIFEST_PATH)
+        
+        if os.path.exists(LOCAL_LINEAGE_PATH):
+            logger.info("Syncing final data lineage metadata to MinIO...")
+            minio_storage.upload_file(BRONZE_BUCKET_NAME, LINEAGE_OBJECT_NAME, LOCAL_LINEAGE_PATH)
+            logger.info("Metadata and Checkpoints synced successfully to MinIO Cloud.")
+    
+    except Exception as sync_err:
+        logger.error(f"[METADATA SYNC ERROR] Thất bại khi đồng bộ dữ liệu theo dõi hệ thống lên MinIO: {sync_err}")
+
+    mark_processed(DATASET_CHECKPOINT_KEY)
 
     metrics.print_summary()
     logger.info("==========================================")
