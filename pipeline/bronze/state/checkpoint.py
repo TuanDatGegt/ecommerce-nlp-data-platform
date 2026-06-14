@@ -5,7 +5,9 @@ import os
 
 from pipeline.bronze.storage.minio_client import MinioClient
 
-from configs.settings import CHECKPOINT_OBJECT, RAW_BUCKET_NAME
+from configs.settings import CHECKPOINT_OBJECT, BRONZE_BUCKET_NAME
+
+LOCAL_MANIFEST_PATH = os.path.join("logs", "bronze_local_manifest.json")
 
 def load_manifest():
     """Load file manifest checkpoint on MinIO to checking status."""
@@ -14,7 +16,7 @@ def load_manifest():
     local_manifest = os.path.join(temp_dir, "bronze_manifest.json")
     try:
         storage.download_file(
-            bucket_name=RAW_BUCKET_NAME,
+            bucket_name=BRONZE_BUCKET_NAME,
             object_name=CHECKPOINT_OBJECT,
             file_path=local_manifest
         )
@@ -43,7 +45,7 @@ def save_manifest(manifest):
         json.dump(manifest, f, indent=4)
 
     storage.upload_file(
-        bucket_name=RAW_BUCKET_NAME,
+        bucket_name=BRONZE_BUCKET_NAME,
         object_name=CHECKPOINT_OBJECT,
         file_path=local_manifest
     )
