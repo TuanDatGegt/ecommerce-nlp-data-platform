@@ -65,5 +65,5 @@ def process_silver_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     df_english = df[df['is_en'] == True].drop(columns=['is_en']).copy()
     df_wrong_lang = df[df['is_en']==False].drop(columns=['is_en']).copy()
     
-    return df
+    return df_english, df_wrong_lang
 
