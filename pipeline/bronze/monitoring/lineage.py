@@ -5,51 +5,34 @@ import json
 import tempfile
 from datetime import datetime, timezone
 
-from pipeline.bronze.storage.minio_client import MinioClient
 from configs.settings import RAW_BUCKET_NAME, LINEAGE_OBJECT_NAME
 
-# LINEAGA_OBJECT_NAME = "metadata/lineage/bronze_lineage.json"
+LOCAL_LINEAGE_PATH =os.path.join("logs", "bronze_local_lineage.json")
 
 
 
 def load_lineage():
-    storage_client = MinioClient()
-    temp_file = tempfile.mkdtemp()
-    local_file = os.path.join(temp_file, "bronze_lineage.json")
 
-    try:
-        storage_client.download_file(
-            bucket_name=RAW_BUCKET_NAME,
-            object_name=LINEAGE_OBJECT_NAME,
-            local_path=local_file
-        )
-        with open(local_file, "r", encoding="utf-8") as f:
-            lineage_data =json.load(f)
-
-    except Exception:
-        lineage_data = []
+    if not os.path.join(LOCAL_LINEAGE_PATH):
+        os.makedirs(os.path.dirname(LOCAL_LINEAGE_PATH), exist_ok=True)
+        with open(LOCAL_LINEAGE_PATH, "w", encoding="utf-8") as f:
+            json.dump([], f)
+        return []
     
-    finally:
-        if os.path.exists(local_file):
-            os.remove(local_file)
-
-    return lineage_data
+    try:
+        with open(LOCAL_LINEAGE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
 def save_lineage(lineage_data):
-    storage_client = MinioClient()
-    temp_dir = tempfile.mkdtemp()
-    local_file = os.path.join(temp_dir, "bronze_lineage.json")
+    os.makedirs(os.path.dirname(LOCAL_LINEAGE_PATH), exist_ok=True)
+    try:
+        with open(LOCAL_LINEAGE_PATH, "w", encoding="utf-8") as f:
+            json.dump(lineage_data, f, indent=4)
+    except Exception as e:
+        print(f"[LINEAGE ERROR] Khong the ghi file lineage local: {e}")
 
-    with open(local_file, "w", encoding="utf-8") as f:
-        json.dump(lineage_data, f, indent=4)
-    
-    storage_client.upload_file(
-        bucket_name=RAW_BUCKET_NAME,
-        object_name=LINEAGE_OBJECT_NAME,
-        local_path=local_file
-    )
-    if os.path.exists(local_file):
-        os.remove(local_file)
 
 def record_lineage(source_file, parquet_objects, category, row_count, chunk_idx):
     lineage_data = load_lineage()
