@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from pipeline.bronze.storage.minio_client import MinioClient
 
-from configs.settings import RAW_BUCKET_NAME
+from configs.settings import BRONZE_BUCKET_NAME
 
 storage = MinioClient(auto_init=False)
 
@@ -37,7 +37,7 @@ def write_to_dlq(df, source_file, error_message):
     object_name = f"dlq/bronze/{file_name}"
 
     storage.upload_file(
-        bucket_name=RAW_BUCKET_NAME,
+        bucket_name=BRONZE_BUCKET_NAME,
         file_path=local_file,
         object_name=object_name)
     
