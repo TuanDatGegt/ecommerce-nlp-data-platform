@@ -2,11 +2,11 @@
 
 import os
 import tempfile
-from pipeline.bronze.storage.minio_client import MinioCLinent
+from pipeline.bronze.storage.minio_client import MinioClient
 
 from configs.settings import BRONZE_BUCKET_NAME
 
-storage = MinioCLinent()
+storage = MinioClient()
 
 def upload_parquet_file(local_parquet_file, object_name):
     """
