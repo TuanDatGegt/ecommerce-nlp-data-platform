@@ -1,6 +1,7 @@
 #pipeline/silver/processing/enricher.py
 
 import pandas as pd
+import numpy as np
 
 def enrich_sentiment(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
@@ -22,8 +23,10 @@ def enrich_feature(df: pd.DataFrame) -> pd.DataFrame:
         return df
     
     if ('helpful_votes' in df.columns and 'total_votes' in df.columns):
-        df['helpful_ratio'] = (
-            df['helpful_votes'].div(df['total_votes'].replace(0, pd.NA)).fillna(0.0)
+        df["helpful_ratio"] = np.where(
+            df["total_votes"] > 0,
+            df["helpful_votes"] / df["total_votes"],
+            0.0
         )
 
     return df
