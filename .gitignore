@@ -14,5 +14,9 @@ logs/
 *.pyc
 *.parquet
 *.tsv
+<<<<<<< Updated upstream
 *.png
 *.json
+=======
+*.png
+>>>>>>> Stashed changes
