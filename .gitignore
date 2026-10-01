@@ -20,3 +20,6 @@ logs/
 =======
 *.png
 >>>>>>> Stashed changes
+
+config.sh
+vector_store/chroma_db/
