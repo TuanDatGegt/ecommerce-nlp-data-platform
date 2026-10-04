@@ -1,4 +1,4 @@
-#pipeline/silver/storage/silver_storage.py
+# pipeline/storage/silver/silver_storage.py
 
 import os
 import io
@@ -6,7 +6,15 @@ import json
 import pandas as pd
 from minio import Minio
 from pipeline.bronze.storage.minio_client import MinioClient
-from configs.settings import BRONZE_BUCKET_NAME, SILVER_BUCKET_NAME, MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_SECURE
+from configs.settings import (
+    BRONZE_BUCKET_NAME,
+    SILVER_BUCKET_NAME,
+    MINIO_ENDPOINT,
+    MINIO_ACCESS_KEY,
+    MINIO_SECRET_KEY,
+    MINIO_SECURE,
+)
+
 
 class SilverStorage:
     def __init__(self, ensur_bucket: bool = False):
@@ -15,7 +23,7 @@ class SilverStorage:
             endpoint=MINIO_ENDPOINT,
             access_key=MINIO_ACCESS_KEY,
             secret_key=MINIO_SECRET_KEY,
-            secure=MINIO_SECURE
+            secure=MINIO_SECURE,
         )
         if ensur_bucket:
             self._ensure_silver_bucket()
@@ -35,17 +43,17 @@ class SilverStorage:
     def write_parquet_to_silver(self, df: pd.DataFrame, object_name: str):
         if df.empty:
             return
-        
+
         buffer = io.BytesIO()
         df.to_parquet(buffer, index=False, compression="snappy")
         buffer.seek(0)
 
         self.client.put_object(
-            bucket_name = SILVER_BUCKET_NAME,
-            object_name = object_name,
-            data = buffer,
-            length = len(buffer.getvalue()),
-            content_type = "application/parquet"
+            bucket_name=SILVER_BUCKET_NAME,
+            object_name=object_name,
+            data=buffer,
+            length=len(buffer.getvalue()),
+            content_type="application/parquet",
         )
 
     def write_parquet_to_silver(self, df: pd.DataFrame, object_name: str):
@@ -69,6 +77,5 @@ class SilverStorage:
             object_name=object_name,
             data=buffer,
             length=parquet_size,
-            content_type="application/parquet"
+            content_type="application/parquet",
         )
-

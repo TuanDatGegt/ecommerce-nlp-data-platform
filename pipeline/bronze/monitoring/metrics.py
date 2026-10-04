@@ -1,6 +1,7 @@
-#utils/metrics.py
+## pipeline/bronze/monitoring/metrics.py
 import time
 from datetime import datetime, timezone
+
 
 class PipelineMetrics:
     def __init__(self):
@@ -10,11 +11,10 @@ class PipelineMetrics:
         self.processed_files = 0
         self.processed_chunks = 0
         self.start_datetime = datetime.now(timezone.utc).isoformat()
-    
 
     def add_rows(self, rows: int):
         self.total_rows += rows
-    
+
     def add_failed_rows(self, rows: int):
         self.failed_rows += rows
 
@@ -33,13 +33,13 @@ class PipelineMetrics:
             f"processed_chunks": self.processed_chunks,
             f"processed_rows": self.total_rows,
             f"failed_rows": self.failed_rows,
-            f"duration_seconds": round(duration, 2)
+            f"duration_seconds": round(duration, 2),
         }
-    
+
     def print_summary(self):
         summary = self.summary()
         print("\n======== PIPELINE METRICS SUMMARY ========")
-        
+
         for key, value in summary.items():
             print(f"{key}: {value}")
 

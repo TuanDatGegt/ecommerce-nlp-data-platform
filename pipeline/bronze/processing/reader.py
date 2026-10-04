@@ -1,5 +1,4 @@
-<<<<<<< Updated upstream:pipeline/bronze/processing/reader.py
-#pipeline/bronze/processing/reader.py
+# pipeline/bronze/processing/reader.py
 
 import pandas as pd
 import csv
@@ -14,7 +13,6 @@ def read_tsv_in_chunks(input_file):
         engine='python',
         quoting=csv.QUOTE_NONE,
         on_bad_lines='skip'
-=======
 #pipeline/bronze/ingrest.py
 
 import pandas as pd
@@ -30,5 +28,4 @@ def read_tsv_in_chunks(input_file):
         engine='python',
         quoting=csv.QUOTE_NONE,
         on_bad_lines='skip'
->>>>>>> Stashed changes:pipeline/bronze/ingrest.py
     )

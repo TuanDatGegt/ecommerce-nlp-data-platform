@@ -1,5 +1,4 @@
-<<<<<<< Updated upstream:pipeline/bronze/processing/metadata.py
-#pipeline/bronze/processing/metadata.py
+# pipeline/bronze/processing/metadata.py
 
 import os
 import re
@@ -8,11 +7,11 @@ from datetime import datetime, timezone
 from configs.settings import CATEGORY_MAPPING
 
 
-def extract_category_from_filename(file_name: str) ->str:
+def extract_category_from_filename(file_name: str) -> str:
     match = re.search(CATEGORY_MAPPING, file_name)
     if match:
         return match.group(1)
-    return 'Unknown'
+    return "Unknown"
 
 
 def build_partition_prefix(category: str):
@@ -22,8 +21,9 @@ def build_partition_prefix(category: str):
     month = f"{now.month:02d}"
 
     return f"bronze/reviews/year={year}/month={month}/category={category}"
-=======
-#pipeline/bronze/metadata.py
+
+
+# pipeline/bronze/metadata.py
 import os
 import re
 from datetime import datetime, timezone
@@ -32,13 +32,13 @@ from configs.settings import CATEGORY_MAPPING
 from configs.settings import DATA_LAKE_PATH
 
 
-def extract_category_from_filename(file_name: str) ->str:
+def extract_category_from_filename(file_name: str) -> str:
     match = re.search(CATEGORY_MAPPING, file_name)
 
     if match:
         return match.group(1)
 
-    return 'Unknown'
+    return "Unknown"
 
 
 def build_partition_path(category):
@@ -53,7 +53,5 @@ def build_partition_path(category):
         "reviews",
         f"year={year}",
         f"month={month}",
-        f"category={category}"
+        f"category={category}",
     )
-
->>>>>>> Stashed changes:pipeline/bronze/metadata.py

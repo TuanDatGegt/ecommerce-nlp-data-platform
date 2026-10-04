@@ -14,12 +14,10 @@ logs/
 *.pyc
 *.parquet
 *.tsv
-<<<<<<< Updated upstream
 *.png
 *.json
 =======
 *.png
->>>>>>> Stashed changes
 
 config.sh
 vector_store/chroma_db/

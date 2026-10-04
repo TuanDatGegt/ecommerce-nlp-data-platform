@@ -1,9 +1,15 @@
-#pipeline/bronze/storage/minio_client.py
+## pipeline/storage/bronze/minio_client.py
 
 from minio import Minio
 from minio.error import S3Error
 
-from configs.settings import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_SECURE
+from configs.settings import (
+    MINIO_ENDPOINT,
+    MINIO_ACCESS_KEY,
+    MINIO_SECRET_KEY,
+    MINIO_SECURE,
+)
+
 
 class MinioClient:
     def __init__(self, auto_init=False):
@@ -11,13 +17,13 @@ class MinioClient:
             endpoint=MINIO_ENDPOINT,
             access_key=MINIO_ACCESS_KEY,
             secret_key=MINIO_SECRET_KEY,
-            secure=MINIO_SECURE
+            secure=MINIO_SECURE,
         )
 
         self.required_buckets = [
-            "ecommerce-reviews-bronze", 
-            "ecommerce-reviews-silver", 
-            "ecommerce-reviews-gold"
+            "ecommerce-reviews-bronze",
+            "ecommerce-reviews-silver",
+            "ecommerce-reviews-gold",
         ]
         if auto_init:
             self._auto_init_buckets()
@@ -39,10 +45,9 @@ class MinioClient:
         except Exception as e:
             raise RuntimeError(f"Cannot connect to MinIO server: {e}")
 
-
     def bucket_exists(self, bucket_name):
         return self.client.bucket_exists(bucket_name)
-    
+
     def create_bucket(self, bucket_name):
         if not self.bucket_exists(bucket_name):
             self.client.make_bucket(bucket_name)
@@ -58,7 +63,7 @@ class MinioClient:
 
     def list_objects(self, bucket_name, prefix=None):
         return self.client.list_objects(bucket_name, prefix=prefix, recursive=True)
-    
+
     def remove_object(self, bucket_name, object_name):
         self.client.remove_object(bucket_name, object_name)
         print(f"Deleted object: {bucket_name}/{object_name}")

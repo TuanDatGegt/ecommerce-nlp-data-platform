@@ -1,9 +1,9 @@
-<<<<<<< Updated upstream:pipeline/bronze/processing/transform.py
-#pipeline/bronze/processing/transform.py
+# pipeline/bronze/processing/transform.py
 
 import pandas as pd
 from datetime import datetime, timezone
 import uuid
+
 
 def optimize_dataframe(df):
     """
@@ -14,34 +14,34 @@ def optimize_dataframe(df):
     for col in ["vine", "verified_purchase"]:
         if col in df.columns:
             df[col] = df[col].map(bool_mapping)
-    
+
     cate_columns = ["marketplace", "product_category"]
     for col in cate_columns:
         if col in df.columns:
-            df[col] = df[col].astype('category')
+            df[col] = df[col].astype("category")
 
-    int_columns = ['star_rating', 'helpful_votes', 'total_votes']
+    int_columns = ["star_rating", "helpful_votes", "total_votes"]
     for col in int_columns:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], downcast='integer', errors='coerce')
+            df[col] = pd.to_numeric(df[col], downcast="integer", errors="coerce")
 
     if "review_date" in df.columns:
-        df['review_date'] = pd.to_datetime(df['review_date'], errors='coerce')
+        df["review_date"] = pd.to_datetime(df["review_date"], errors="coerce")
 
     return df
 
 
 def add_metadata_columns(df, source_file, batch_id):
     """Add metadata columns to the DataFrame."""
-    df['source_file'] = source_file
-    df['ingest_time'] = datetime.now(timezone.utc)
-    df["batch_id"]=batch_id
-=======
-#pipeline/bronze/transform.py
+    df["source_file"] = source_file
+    df["ingest_time"] = datetime.now(timezone.utc)
+    df["batch_id"] = batch_id
+
 
 import pandas as pd
 from datetime import datetime, timezone
 import uuid
+
 
 def optimize_dataframe(df):
     """
@@ -52,28 +52,21 @@ def optimize_dataframe(df):
     for col in ["vine", "verified_purchase"]:
         if col in df.columns:
             df[col] = df[col].map(bool_mapping)
-    
-    cate_columns = [
-        "marketplace",
-        "product_category"
-    ]
+
+    cate_columns = ["marketplace", "product_category"]
 
     for col in cate_columns:
         if col in df.columns:
-            df[col] = df[col].astype('category')
+            df[col] = df[col].astype("category")
 
-    int_columns = [
-        'star_rating',
-        'helpful_votes',
-        'total_votes'
-    ]
+    int_columns = ["star_rating", "helpful_votes", "total_votes"]
 
     for col in int_columns:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], downcast='integer')
+            df[col] = pd.to_numeric(df[col], downcast="integer")
 
     if "review_date" in df.columns:
-        df['review_date'] = pd.to_datetime(df['review_date'], errors='coerce')
+        df["review_date"] = pd.to_datetime(df["review_date"], errors="coerce")
 
     return df
 
@@ -83,11 +76,10 @@ def add_metadata_columns(df, source_file):
     Add metadata columns to the DataFrame.
     """
 
-    df['source_file'] = source_file
-    df['ingest_time'] = datetime.now(timezone.utc)
+    df["source_file"] = source_file
+    df["ingest_time"] = datetime.now(timezone.utc)
 
     batch_id = str(uuid.uuid4())
-    df["batch_id"]=batch_id
-    
->>>>>>> Stashed changes:pipeline/bronze/transform.py
+    df["batch_id"] = batch_id
+
     return df
