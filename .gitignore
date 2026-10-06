@@ -21,7 +21,7 @@ logs/
 
 config.sh
 vector_store/chroma_db/
-roadmap_v6.html
-roadmap_v6.md
+roadmap_v7.html
+roadmap_v7.md
 
 script.md
