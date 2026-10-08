@@ -1,18 +1,9 @@
 ## pipeline/bronze/__init__.py
-from .validate import (
-    validate_required_columns,
-    validate_star_rating,
-    validate_helpful_votes,
-    write_to_dlq,
-)
-from .writer import write_parquet_chunk
-from .sample_writer import save_sample_chunk
+"""
+Bronze Pipeline Package
+Cung cấp giao diện chạy pipeline xử lý tầng Bronze chuẩn hóa.
+"""
 
-__all__ = [
-    "validate_required_columns",
-    "validate_star_rating",
-    "validate_helpful_votes",
-    "write_to_dlq",
-    "write_parquet_chunk",
-    "save_sample_chunk",
-]
+from pipeline.bronze.pipeline import run_pipeline
+
+__all__ = ["run_pipeline"]
