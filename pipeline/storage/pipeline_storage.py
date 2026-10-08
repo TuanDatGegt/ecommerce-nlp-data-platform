@@ -42,7 +42,7 @@ class PipelineStorage:
         return full_path
 
     def read_parquet(self, relative_path_or_pattern: str) -> pd.DataFrame:
-        """Đọc tệp Parquet hoặc wildcard pattern (vd: 'bronze/reviews/*/*.parquet')."""
+        """Đọc tệp Parquet hoặc wildcard pattern."""
         full_path_pattern = str(self.get_full_path(relative_path_or_pattern))
         matching_files = glob.glob(full_path_pattern, recursive=True)
 
@@ -51,7 +51,8 @@ class PipelineStorage:
                 f"[STORAGE ERROR] Không tìm thấy file Parquet tại: {full_path_pattern}"
             )
 
-        return pd.read_parquet(matching_files)
+        dataframes = [pd.read_parquet(file_path) for file_path in matching_files]
+        return pd.concat(dataframes, ignore_index=True)
 
     def exists(self, relative_path: str) -> bool:
         """Kiểm tra sự tồn tại của file hoặc thư mục."""
