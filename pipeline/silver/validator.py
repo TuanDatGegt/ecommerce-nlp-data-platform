@@ -8,8 +8,8 @@ logger = logging.getLogger("silver_validator")
 def create_validation_views(con: duckdb.DuckDBPyConnection, input_table_or_view: str):
     """
     Tạo các SQL View trên DuckDB để phân tách dữ liệu Hợp lệ (Valid) và Lỗi (Invalid):
-    1. star_rating phải nằm trong khoảng 1 -&gt; 5
-    2. helpful_votes &lt;= total_votes
+    1. star_rating phải nằm trong khoảng 1 -> 5
+    2. helpful_votes <= total_votes
     3. Khử trùng lặp review_id (giữ lại bản ghi có review_date / ingest_time mới nhất)
     4. Yêu cầu bắt buộc không rỗng cho các trường core (review_id, customer_id, product_id, review_body)
     """
@@ -18,17 +18,17 @@ def create_validation_views(con: duckdb.DuckDBPyConnection, input_table_or_view:
         CREATE OR REPLACE VIEW v_silver_invalid AS
         SELECT *,
             CASE
-                WHEN star_rating &lt; 1 OR star_rating &gt; 5 THEN 'INVALID_STAR_RATING'
-                WHEN helpful_votes &gt; total_votes THEN 'INVALID_HELPFUL_VOTES'
+                WHEN star_rating < 1 OR star_rating > 5 THEN 'INVALID_STAR_RATING'
+                WHEN helpful_votes > total_votes THEN 'INVALID_HELPFUL_VOTES'
                 WHEN review_id IS NULL OR review_id = '' THEN 'MISSING_REVIEW_ID'
                 WHEN product_id IS NULL OR product_id = '' THEN 'MISSING_PRODUCT_ID'
                 WHEN review_body IS NULL OR TRIM(review_body) = '' THEN 'MISSING_REVIEW_BODY'
                 ELSE 'UNKNOWN_ERROR'
             END AS dlq_rejection_reason
         FROM {input_table_or_view}
-        WHERE star_rating &lt; 1 
-           OR star_rating &gt; 5
-           OR helpful_votes &gt; total_votes
+        WHERE star_rating < 1 
+           OR star_rating > 5
+           OR helpful_votes > total_votes
            OR review_id IS NULL OR review_id = ''
            OR product_id IS NULL OR product_id = ''
            OR review_body IS NULL OR TRIM(review_body) = '';
@@ -42,7 +42,7 @@ def create_validation_views(con: duckdb.DuckDBPyConnection, input_table_or_view:
             SELECT *
             FROM {input_table_or_view}
             WHERE star_rating BETWEEN 1 AND 5
-              AND helpful_votes &lt;= total_votes
+              AND helpful_votes <= total_votes
               AND review_id IS NOT NULL AND review_id != ''
               AND product_id IS NOT NULL AND product_id != ''
               AND review_body IS NOT NULL AND TRIM(review_body) != ''
