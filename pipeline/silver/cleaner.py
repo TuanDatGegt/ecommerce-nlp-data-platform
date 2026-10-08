@@ -1,71 +1,59 @@
-#pipeline/silver/processing/cleaner.py
-
+## pipeline/silver/processing/cleaner.py
 import re
+import html
+import logging
 import pandas as pd
 
-def clean_text_field(text):
-    if pd.isna(text):
+logger = logging.getLogger("silver_cleaner")
+
+# Compile sẵn Regex patterns để tối ưu tốc độ thực thi
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+MULTIPLE_SPACES_RE = re.compile(r"\s+")
+SPECIAL_CHARS_RE = re.compile(r"[^\w\s.,!?\'-]")
+
+
+def strip_html_tags(text: str) -> str:
+    """Loại bỏ các thẻ HTML và decode HTML entities (vd: &amp; -&gt; &amp;)."""
+    if not isinstance(text, str) or not text:
         return ""
-    
-    text = str(text)
-    
-    #Loại bỏ các thẻ HTML giả lập hoặc thẻ thừa phát sinh khi crawl (<br />, <div>)
-    text = re.sub(r'<[^>]+>', ' ', text)
-
-    #Thay thế kí tự xuống dòng thành khoảng trắng đơn
-    text = re.sub(r'\s+', ' ', text)
-
-    #Loại bỏ các ký tự đặc biệt thừa nhưng giữ nguyên dấu câu quan trọng
-    text = re.sub(r'[^\w\s\.,!\?]', '', text)
-
-    return text.strip()
+    # Unescape HTML entities trước, sau đó xóa tags
+    clean_text = html.unescape(text)
+    clean_text = HTML_TAG_RE.sub(" ", clean_text)
+    return clean_text
 
 
-def process_silver_cleaning(df: pd.DataFrame):
-    if df.empty:
-        return df, df
-    
+def normalize_text(text: str, lowercase: bool = True) -> str:
+    """
+    Tải và chuẩn hóa văn bản:
+    1. Bóc tách HTML tags
+    2. Chuyển về chữ thường (lowercase)
+    3. Loại bỏ ký tự đặc biệt không mong muốn
+    4. Gom nhóm khoảng trắng dư thừa
+    """
+    if not isinstance(text, str) or not text.strip():
+        return ""
+
+    cleaned = strip_html_tags(text)
+    if lowercase:
+        cleaned = cleaned.lower()
+
+    cleaned = SPECIAL_CHARS_RE.sub(" ", cleaned)
+    cleaned = MULTIPLE_SPACES_RE.sub(" ", cleaned).strip()
+    return cleaned
+
+
+def clean_review_dataframe(
+    df: pd.DataFrame, text_columns: list[str] = None
+) -> pd.DataFrame:
+    """
+    Áp dụng hàm chuẩn hóa văn bản cho toàn bộ DataFrame Pandas/PyArrow batch.
+    """
+    if text_columns is None:
+        text_columns = ["review_headline", "review_body"]
+
     df = df.copy()
-
-    string_cols = ['marketplace', 'customer_id', 'review_id', 'product_id',
-                   'product_parent', 'product_title', 'product_category']
-    
-    for col in string_cols:
+    for col in text_columns:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).apply(normalize_text)
 
-    #Encoding Numeric
-    if 'star_rating' in df.columns:
-        df['star_rating'] = (pd.to_numeric(df['star_rating'], errors='coerce').fillna(0).astype("int8"))
-    if 'helpful_votes' in df.columns:
-        df['helpful_votes'] = (pd.to_numeric(df['helpful_votes'], errors='coerce').fillna(0).astype("int32"))
-    if 'total_votes' in df.columns:
-        df['total_votes'] = (pd.to_numeric(df['total_votes'], errors='coerce').fillna(0).astype("int32"))
-    if 'review_date' in df.columns:
-        df['review_date'] = pd.to_datetime(df['review_date'], errors='coerce')
-
-    if 'vine' in df.columns:
-        df['vine'] = (df['vine'].map({'True': True, 'False': False, True: True, False: False}).fillna(False))
-    if 'verified_purchase' in df.columns:
-        df['verified_purchase'] = (df['verified_purchase'].map({'True': True, 'False': False, True: True, False: False}).fillna(False))
-
-    if 'review_headline' in df.columns:
-        df['cleaned_review_headline'] = (df['review_headline'].apply(clean_text_field))
-    if 'review_body' in df.columns:
-        df['cleaned_review_body'] = (df['review_body'].apply(clean_text_field))
-
-    # =====================================
-    # PERFORMANCE IMPROVEMENT
-    #
-    # Dataset Amazon US Reviews
-    # bỏ langdetect
-    # =====================================
-    """
-    df['is_en'] = df['cleaned_review_body'].apply(is_e)
-
-    df_english = df[df['is_en'] == True].drop(columns=['is_en']).copy()
-    df_wrong_lang = df[df['is_en']==False].drop(columns=['is_en']).copy()
-    """
-    
-    return df, pd.DataFrame()
-
+    return df

@@ -1,31 +1,66 @@
-#pipeline/silver/processing/validator.py
+##pipeline/silver/validator.py
+import logging
+import duckdb
 
-import pandas as pd
+logger = logging.getLogger("silver_validator")
 
-def validate_silver_quality(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    
 
-    if df.empty:
-        return df, df
-    
-    not_null_cond = (df['product_id'].notna() & df['review_body'].notna())
+def create_validation_views(con: duckdb.DuckDBPyConnection, input_table_or_view: str):
+    """
+    Tạo các SQL View trên DuckDB để phân tách dữ liệu Hợp lệ (Valid) và Lỗi (Invalid):
+    1. star_rating phải nằm trong khoảng 1 -&gt; 5
+    2. helpful_votes &lt;= total_votes
+    3. Khử trùng lặp review_id (giữ lại bản ghi có review_date / ingest_time mới nhất)
+    4. Yêu cầu bắt buộc không rỗng cho các trường core (review_id, customer_id, product_id, review_body)
+    """
+    # 1. Tạo View lọc dữ liệu vi phạm Rule (Invalid / Corrupted)
+    invalid_query = f"""
+        CREATE OR REPLACE VIEW v_silver_invalid AS
+        SELECT *,
+            CASE
+                WHEN star_rating &lt; 1 OR star_rating &gt; 5 THEN 'INVALID_STAR_RATING'
+                WHEN helpful_votes &gt; total_votes THEN 'INVALID_HELPFUL_VOTES'
+                WHEN review_id IS NULL OR review_id = '' THEN 'MISSING_REVIEW_ID'
+                WHEN product_id IS NULL OR product_id = '' THEN 'MISSING_PRODUCT_ID'
+                WHEN review_body IS NULL OR TRIM(review_body) = '' THEN 'MISSING_REVIEW_BODY'
+                ELSE 'UNKNOWN_ERROR'
+            END AS dlq_rejection_reason
+        FROM {input_table_or_view}
+        WHERE star_rating &lt; 1 
+           OR star_rating &gt; 5
+           OR helpful_votes &gt; total_votes
+           OR review_id IS NULL OR review_id = ''
+           OR product_id IS NULL OR product_id = ''
+           OR review_body IS NULL OR TRIM(review_body) = '';
+    """
+    con.execute(invalid_query)
 
-    valid_rating_cond = df['star_rating'].between(1, 5)
+    # 2. Tạo View lọc dữ liệu đạt chuẩn + Khử trùng lặp review_id (Qualify Deduplication)
+    valid_query = f"""
+        CREATE OR REPLACE VIEW v_silver_valid AS
+        WITH filtered_data AS (
+            SELECT *
+            FROM {input_table_or_view}
+            WHERE star_rating BETWEEN 1 AND 5
+              AND helpful_votes &lt;= total_votes
+              AND review_id IS NOT NULL AND review_id != ''
+              AND product_id IS NOT NULL AND product_id != ''
+              AND review_body IS NOT NULL AND TRIM(review_body) != ''
+        )
+        SELECT * EXCLUDE (row_num)
+        FROM (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY review_id 
+                    ORDER BY COALESCE(review_date, '1970-01-01') DESC, 
+                             COALESCE(ingest_time, '') DESC
+                ) as row_num
+            FROM filtered_data
+        )
+        WHERE row_num = 1;
+    """
+    con.execute(valid_query)
 
-    valid_votes_cond = (df['helpful_votes'] <= df['total_votes'])
-    
-    valid_mask = (not_null_cond & valid_rating_cond & valid_votes_cond)
-
-    df_valid = df.loc[valid_mask]
-    df_invalid = df.loc[~valid_mask]
-
-    if not df_valid.empty:
-        duplicate_mask = df_valid.duplicated(subset=["review_id"], keep='first')
-        if duplicate_mask.any():
-            df_duplicate = df_valid.loc[duplicate_mask]
-
-            df_invalid = pd.concat([df_invalid, df_duplicate], ignore_index=True)
-            df_valid = df_valid.loc[~duplicate_mask]
-
-    return (df_valid.copy(), df_invalid.copy())
-
+    logger.info(
+        "Đã khởi tạo xong DuckDB validation views (v_silver_valid, v_silver_invalid)."
+    )
