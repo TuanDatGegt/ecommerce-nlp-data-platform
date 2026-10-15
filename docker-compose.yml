@@ -1,1 +1,119 @@
-#docker_compose.yml
+## docker_compose.yml
+version: '3.8'
+
+x-airflow-common: &amp;airflow-common
+  image: ${AIRFLOW_PROD_IMAGE:-apache/airflow:2.8.1-python3.10}
+  environment:
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+    - AIRFLOW__CORE__FERNET_KEY=46Gd3518MN36R1-X343_821379_72918=
+    - PYTHONPATH=/opt/airflow
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./pipeline:/opt/airflow/pipeline
+    - ./configs:/opt/airflow/configs
+    - ./utils:/opt/airflow/utils
+    - ./data:/opt/airflow/data
+    - ./logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - ecommerce-network
+
+services:
+  # --- 1. PostgreSQL (Warehouse &amp; MetaDB) ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: ecommerce_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./warehouse/sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecommerce-network
+
+  # --- 2. Airflow Initializer ---
+  airflow-init:
+    <<: *airflow-common
+    container_name: ecommerce_airflow_init
+    command: >
+      bash -c "airflow db init &amp;&amp;
+               airflow users create
+               --username ${AIRFLOW_ADMIN_USER}
+               --password ${AIRFLOW_ADMIN_PASSWORD}
+               --firstname Admin
+               --lastname User
+               --role Admin
+               --email ${AIRFLOW_ADMIN_EMAIL}"
+
+  # --- 3. Airflow Webserver &amp; Scheduler ---
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: ecommerce_airflow_webserver
+    restart: always
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: ecommerce_airflow_scheduler
+    restart: always
+    command: scheduler
+
+  # --- 4. ChromaDB (Vector Store) ---
+  chromadb:
+    image: chromadb/chroma:0.4.22
+    container_name: ecommerce_chromadb
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./vector_store/chroma_db:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - ecommerce-network
+
+  # --- 5. Apache Superset (Analytics) ---
+  superset:
+    image: apache/superset:3.0.1
+    container_name: ecommerce_superset
+    restart: always
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}
+    volumes:
+      - ./analytics/superset:/app/superset_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+volumes:
+  postgres_data:
+
+networks:
+  ecommerce-network:
+    driver: bridge
