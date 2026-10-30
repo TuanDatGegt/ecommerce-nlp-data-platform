@@ -1,7 +1,5 @@
 ## pipeline/bronze/downloader.py
 import os
-import glob
-import shutil
 import logging
 import kagglehub
 from pathlib import Path
@@ -29,56 +27,48 @@ def validate_kaggle_credentials() -> None:
 
 def download_kaggle_dataset() -> str:
     """
-    Tải dataset từ KaggleHub và lưu trữ/đồng bộ vào thư mục data/raw/ của dự án.
-    Nếu data/raw/ đã có sẵn các tệp TSV, sử dụng trực tiếp (Cache Hit).
+    Tải và giải nén dataset trực tiếp vào RAW_DATA_PATH.
+    Nếu RAW_DATA_PATH đã có TSV, sử dụng trực tiếp (Cache Hit).
     """
-    raw_dir = Path(RAW_DATA_PATH if RAW_DATA_PATH else "data/raw").resolve()
+    raw_dir = Path(RAW_DATA_PATH).resolve()
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Kiểm tra Cache Hit tại thư mục local data/raw/
-    existing_tsv_files = glob.glob(os.path.join(raw_dir, "*.tsv"))
+    # 1. Kiểm tra Cache Hit tại RAW_DATA_PATH
+    existing_tsv_files = list(raw_dir.rglob("*.tsv"))
     if existing_tsv_files:
         logger.info(
             f"[CACHE HIT] Tìm thấy {len(existing_tsv_files)} tệp TSV có sẵn tại: {raw_dir}"
         )
         return str(raw_dir)
 
-    # 2. Xử lý tải về qua KaggleHub nếu chưa có trong data/raw/
     validate_kaggle_credentials()
     logger.info(f"[DOWNLOAD] Đang tải dataset từ Kaggle: {KAGGLE_DATASET}")
 
     try:
-        # KaggleHub tải về thư mục cache mặc định của OS
-        cache_dataset_path = kagglehub.dataset_download(handle=KAGGLE_DATASET)
-        logger.info(f"[DOWNLOAD SUCCESS] Dataset đã tải về cache: {cache_dataset_path}")
+        downloaded_path = kagglehub.dataset_download(
+            handle=KAGGLE_DATASET,
+            output_dir=str(raw_dir),
+        )
+        logger.info(
+            f"[DOWNLOAD SUCCESS] Dataset đã tải và giải nén tại: {downloaded_path}"
+        )
 
-        # 3. Đồng bộ/Sao chép các tệp TSV từ KaggleHub cache về data/raw/
-        downloaded_tsvs = glob.glob(os.path.join(cache_dataset_path, "*.tsv"))
+        downloaded_tsvs = list(raw_dir.rglob("*.tsv"))
         if not downloaded_tsvs:
-            # Tìm kiếm đệ quy nếu tệp TSV nằm trong thư mục con
-            downloaded_tsvs = glob.glob(
-                os.path.join(cache_dataset_path, "**", "*.tsv"), recursive=True
+            raise FileNotFoundError(
+                f"[DOWNLOAD ERROR] Không tìm thấy tệp TSV sau khi tải vào: {raw_dir}"
             )
-
-        for tsv_file in downloaded_tsvs:
-            dest_file = raw_dir / os.path.basename(tsv_file)
-            if not dest_file.exists():
-                shutil.copy2(tsv_file, dest_file)
-                logger.info(
-                    f"[SYNC] Đã chuyển tệp {os.path.basename(tsv_file)} -&gt; {raw_dir}"
-                )
 
         return str(raw_dir)
 
     except Exception as e:
         logger.error(f"[DOWNLOAD ERROR] Lỗi khi tải hoặc đồng bộ dataset: {e}")
-        raise e
+        raise
 
 
 def discover_tsv_files(dataset_path: str) -> list[str]:
-    """Quét và trả về danh sách các tệp TSV thô tại thư mục chỉ định (data/raw/)."""
-    pattern = os.path.join(dataset_path, "*.tsv")
-    files = glob.glob(pattern)
+    """Quét và trả về danh sách các tệp TSV thô tại thư mục chỉ định."""
+    files = [str(path) for path in Path(dataset_path).rglob("*.tsv")]
 
     if not files:
         raise FileNotFoundError(

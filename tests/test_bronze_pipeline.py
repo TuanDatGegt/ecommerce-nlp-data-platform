@@ -72,19 +72,34 @@ def test_process_and_save_chunk(tmp_path: Path):
 
 
 @patch("pipeline.bronze.downloader.kagglehub.dataset_download")
-def test_download_kaggle_dataset_native(mock_download):
-    mock_download.return_value = "/mock/kagglehub/cache/dataset"
+def test_download_kaggle_dataset_extracts_to_raw_path(mock_download, tmp_path: Path):
+    raw_dir = tmp_path / "data2" / "raw"
 
-    with patch.dict(
-        "os.environ",
-        {
-            "USERNAME_KAGGLE": "test_user",
-            "API_KAGGLE_TOKEN_KEY": "test_key",
-        },
+    def fake_download(*, handle, output_dir):
+        destination = Path(output_dir) / "dataset-files"
+        destination.mkdir(parents=True, exist_ok=True)
+        (destination / "reviews.tsv").write_text("review_id\nR1\n", encoding="utf-8")
+        return output_dir
+
+    mock_download.side_effect = fake_download
+
+    with (
+        patch("pipeline.bronze.downloader.RAW_DATA_PATH", raw_dir),
+        patch("pipeline.bronze.downloader.USERNAME_KAGGLE", "test_user"),
+        patch("pipeline.bronze.downloader.API_KAGGLE_TOKEN_KEY", "test_key"),
     ):
         dataset_path = download_kaggle_dataset()
-        assert dataset_path == "/mock/kagglehub/cache/dataset"
-        mock_download.assert_called_once()
+
+    assert dataset_path == str(raw_dir.resolve())
+    assert (
+        raw_dir.joinpath("dataset-files", "reviews.tsv").read_text(encoding="utf-8")
+        == "review_id\nR1\n"
+    )
+    assert discover_tsv_files(dataset_path) == [
+        str(raw_dir / "dataset-files" / "reviews.tsv")
+    ]
+    mock_download.assert_called_once()
+    assert mock_download.call_args.kwargs["output_dir"] == str(raw_dir.resolve())
 
 
 def test_checkpoint_processed_files(tmp_path: Path):
