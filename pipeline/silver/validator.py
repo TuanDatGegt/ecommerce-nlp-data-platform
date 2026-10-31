@@ -1,4 +1,4 @@
-##pipeline/silver/validator.py
+## pipeline/silver/validator.py
 import logging
 import duckdb
 
