@@ -12,7 +12,9 @@ from configs.settings import (
 # Đường dẫn con của Gold Layer
 GOLD_DASHBOARD_DIR = GOLD_DATA_PATH / "dashboard"
 GOLD_NLP_DIR = GOLD_DATA_PATH / "nlp_features"
-DUCKDB_TEMP_DIR = METADATA_PATH / "duckdb_temp"
+# cho phép đặt thư mục temp bằng .env, nên trỏ vào ổ nhiều dung lượng
+DUCKDB_TEMP_DIR = Path(os.getenv("DUCKDB_TEMP_DIR", str(METADATA_PATH / "duckdb_temp")))
+DUCKDB_MAX_TEMP_SIZE = os.getenv("DUCKDB_MAX_TEMP_SIZE", "200GB")
 
 # Ngưỡng cấu hình xử lý
 MIN_BODY_LEN = int(os.getenv("GOLD_MIN_BODY_LEN", "10"))
