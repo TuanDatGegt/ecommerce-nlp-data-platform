@@ -100,5 +100,5 @@ def process_and_save_chunk(
     chunk_idx: int,
 ) -> Path:
     """Ghi trực tiếp DataFrame ra tệp Parquet phân vùng tại data/bronze/."""
-    relative_path = f"bronze/reviews/year={year}/month={month}/category={category}/part_{chunk_idx:05d}.parquet"
+    relative_path = f"bronze/category={category}/part_{chunk_idx:05d}.parquet"
     return storage.save_parquet(df, relative_path, compression=COMPRESSION)
