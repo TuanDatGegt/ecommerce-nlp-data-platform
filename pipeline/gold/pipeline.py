@@ -36,9 +36,10 @@ MAX_SAME_ERROR = (
 
 
 def discover_silver_categories(storage: PipelineStorage) -> list[str]:
-    """Lấy danh sách category từ tên thư mục partition (không liệt kê hàng nghìn file)."""
-    silver_dir = storage.get_full_path("silver/reviews")
+    """Lấy danh sách category từ tên thư mục partition."""
+    silver_dir = storage.get_full_path("silver")
     if not silver_dir.exists():
+        logger.error(f"Không tìm thấy thư mục Silver: {silver_dir}")
         return []
     return sorted(
         {p.name.split("=", 1)[1] for p in silver_dir.rglob("category=*") if p.is_dir()}
@@ -49,7 +50,7 @@ def _expected_outputs(storage: PipelineStorage, cat: str) -> list[Path]:
     nlp_file = storage.get_full_path(
         f"gold/nlp_features/category={cat}/part_00000.parquet"
     )
-    cat_parts_dir = storage.get_full_path(f"gold/dashboard/parts/category={cat}")
+    cat_parts_dir = storage.get_full_path(f"gold/dashboard/category={cat}")
     return [nlp_file] + [
         cat_parts_dir / f"{prefix}_{cat}.parquet" for prefix in PART_TABLES
     ]
@@ -76,9 +77,7 @@ def run_category_pipeline(
     parts_dir.mkdir(parents=True, exist_ok=True)
 
     # Chỉ quét đúng thư mục của category này
-    silver_pattern = str(
-        storage.get_full_path(f"silver/reviews/year=*/month=*/category={cat}/*.parquet")
-    )
+    silver_pattern = str(storage.get_full_path(f"silver/category={cat}/*.parquet"))
 
     con = duckdb.connect(database=":memory:")
     con.execute(f"SET memory_limit='{DUCKDB_MEMORY_LIMIT}';")
