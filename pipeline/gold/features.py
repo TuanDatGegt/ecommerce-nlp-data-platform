@@ -41,7 +41,7 @@ def process_nlp_features_by_category(
     """)
 
     cat = _q(category_name)
-    read_sql = f"read_parquet('{_q(silver_path_pattern)}', hive_partitioning = false)"
+    read_sql = f"read_parquet('{_q(silver_path_pattern)}', hive_partitioning = false, union_by_name = true)"
 
     # --- 1. Các tập phụ NHỎ, chỉ đọc 1 cột nên rất nhẹ ---------------------------------
     # review_id bị trùng (thường rỗng nếu Silver đã khử trùng)
